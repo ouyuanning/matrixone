@@ -589,7 +589,7 @@ func getPkValueExpr(builder *QueryBuilder, ctx CompilerContext, tableDef *TableD
 	var bat *batch.Batch
 	var pkLocationInfo orderAndIdx
 	var ok bool
-	var colTyp *Type
+	var colTyp Type
 	proc := ctx.GetProcess()
 	node := builder.qry.Nodes[0]
 	isCompound := len(lmap.m) > 1
@@ -614,7 +614,7 @@ func getPkValueExpr(builder *QueryBuilder, ctx CompilerContext, tableDef *TableD
 
 		valExprs := make([]*Expr, rowsCount)
 		rowTyp := bat.Vecs[idx].GetType()
-		colTyp = makePlan2Type(rowTyp)
+		colTyp = makePlan2TypeValue(rowTyp)
 
 		if rowTyp.Oid == types.T_uuid {
 			typ := types.T_varchar.ToType()
@@ -656,7 +656,7 @@ func getPkValueExpr(builder *QueryBuilder, ctx CompilerContext, tableDef *TableD
 						return nil, err
 					}
 					valExprs[i] = &plan.Expr{
-						Typ: *colTyp,
+						Typ: colTyp,
 						Expr: &plan.Expr_Lit{
 							Lit: constExpr,
 						},
@@ -682,7 +682,7 @@ func getPkValueExpr(builder *QueryBuilder, ctx CompilerContext, tableDef *TableD
 			var orExpr *Expr
 			for i := 0; i < rowsCount; i++ {
 				expr, err := BindFuncExprImplByPlanExpr(builder.GetContext(), "=", []*Expr{{
-					Typ: *colTyp,
+					Typ: colTyp,
 					Expr: &plan.Expr_Col{
 						Col: &ColRef{
 							// ColPos: int32(pkOrderInTableDef),
@@ -709,7 +709,7 @@ func getPkValueExpr(builder *QueryBuilder, ctx CompilerContext, tableDef *TableD
 			// pk in (a1, a2, a3)
 			// args in list must be constant
 			expr, err := BindFuncExprImplByPlanExpr(builder.GetContext(), "in", []*Expr{{
-				Typ: *colTyp,
+				Typ: colTyp,
 				Expr: &plan.Expr_Col{
 					Col: &ColRef{
 						// ColPos: int32(pkOrderInTableDef),

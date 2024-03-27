@@ -1250,7 +1250,7 @@ func (builder *QueryBuilder) remapAllColRefs(nodeID int32, step int32, colRefCnt
 	case plan.Node_LOCK_OP:
 		preNode := builder.qry.Nodes[node.Children[0]]
 		pkexpr := &plan.Expr{
-			Typ: *node.LockTargets[0].GetPrimaryColTyp(),
+			Typ: node.LockTargets[0].GetPrimaryColTyp(),
 			Expr: &plan.Expr_Col{
 				Col: &plan.ColRef{
 					RelPos: preNode.BindingTags[0],
@@ -1667,7 +1667,7 @@ func (builder *QueryBuilder) buildUnion(stmt *tree.UnionClause, astOrderBy tree.
 					if argsType[idx].Oid == types.T_any {
 						node.ProjectList[columnIdx].Typ = *targetType
 					} else {
-						node.ProjectList[columnIdx], err = appendCastBeforeExpr(builder.GetContext(), node.ProjectList[columnIdx], targetType)
+						node.ProjectList[columnIdx], err = appendCastBeforeExpr(builder.GetContext(), node.ProjectList[columnIdx], *targetType)
 						if err != nil {
 							return 0, err
 						}
@@ -2211,7 +2211,7 @@ func (builder *QueryBuilder) buildSelect(stmt *tree.Select, ctx *BindContext, is
 			lockTarget := &plan.LockTarget{
 				TableId:            tableDef.TblId,
 				PrimaryColIdxInBat: int32(pkPos),
-				PrimaryColTyp:      pkTyp,
+				PrimaryColTyp:      *pkTyp,
 				Block:              true,
 				RefreshTsIdxInBat:  -1, //unsupport now
 				FilterColIdxInBat:  -1, //unsupport now
@@ -2449,7 +2449,7 @@ func (builder *QueryBuilder) buildSelect(stmt *tree.Select, ctx *BindContext, is
 					}
 				}
 				if astTimeWindow.Fill.Val != nil {
-					e, err := appendCastBeforeExpr(builder.GetContext(), v, &t.Typ)
+					e, err := appendCastBeforeExpr(builder.GetContext(), v, t.Typ)
 					if err != nil {
 						return 0, err
 					}
@@ -2474,7 +2474,7 @@ func (builder *QueryBuilder) buildSelect(stmt *tree.Select, ctx *BindContext, is
 					if err != nil {
 						return 0, err
 					}
-					col, err := appendCastBeforeExpr(builder.GetContext(), v, &fillCols[i].Typ)
+					col, err := appendCastBeforeExpr(builder.GetContext(), v, fillCols[i].Typ)
 					if err != nil {
 						return 0, err
 					}

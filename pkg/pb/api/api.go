@@ -78,7 +78,7 @@ func NewRenameTableReq(did, tid uint64, old, new string) *AlterTableReq {
 	}
 }
 
-func NewAddColumnReq(did, tid uint64, name string, typ *plan.Type, insertAt int32) *AlterTableReq {
+func NewAddColumnReq(did, tid uint64, name string, typ plan.Type, insertAt int32) *AlterTableReq {
 	return &AlterTableReq{
 		DbId:    did,
 		TableId: tid,
@@ -87,7 +87,7 @@ func NewAddColumnReq(did, tid uint64, name string, typ *plan.Type, insertAt int3
 			&AlterTableAddColumn{
 				Column: &plan.ColDef{
 					Name: name,
-					Typ:  *typ,
+					Typ:  typ,
 					Default: &plan.Default{
 						NullAbility:  true,
 						Expr:         nil,

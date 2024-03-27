@@ -241,7 +241,7 @@ func makeCentroidsSingleJoinMetaOnCurrVersionOrderByL2DistNormalizeL2(builder *Q
 
 	// 4.4 CAST(@var AS BIGINT)
 	targetType := types.T_int64.ToType()
-	planTargetType := makePlan2Type(&targetType)
+	planTargetType := makePlan2TypeValue(&targetType)
 	arg2, err := appendCastBeforeExpr(builder.GetContext(), probeLimitValueExpr, planTargetType)
 	if err != nil {
 		return -1, err

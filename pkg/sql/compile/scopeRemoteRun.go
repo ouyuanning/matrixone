@@ -18,9 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/matrixorigin/matrixone/pkg/sql/colexec/indexjoin"
 	"time"
 	"unsafe"
+
+	"github.com/matrixorigin/matrixone/pkg/sql/colexec/indexjoin"
 
 	v2 "github.com/matrixorigin/matrixone/pkg/util/metric/v2"
 
@@ -749,7 +750,7 @@ func convertToPipelineInstruction(opr *vm.Instruction, ctx *scopeContext, ctxId 
 		in.FuzzyFilter = &pipeline.FuzzyFilter{
 			N:      float32(t.N),
 			PkName: t.PkName,
-			PkTyp:  plan2.DeepCopyType(t.PkTyp),
+			PkTyp:  t.PkTyp,
 		}
 	case *preinsert.Argument:
 		in.PreInsert = &pipeline.PreInsert{

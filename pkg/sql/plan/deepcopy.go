@@ -141,8 +141,8 @@ func DeepCopyPreInsertUkCtx(ctx *plan.PreInsertUkCtx) *plan.PreInsertUkCtx {
 	newCtx := &plan.PreInsertUkCtx{
 		Columns:  make([]int32, len(ctx.Columns)),
 		PkColumn: ctx.PkColumn,
-		PkType:   DeepCopyType(ctx.PkType),
-		UkType:   DeepCopyType(ctx.UkType),
+		PkType:   DeepCopyType(&ctx.PkType),
+		UkType:   DeepCopyType(&ctx.UkType),
 		TableDef: DeepCopyTableDef(ctx.TableDef, true),
 	}
 	copy(newCtx.Columns, ctx.Columns)
@@ -169,7 +169,7 @@ func DeepCopyLockTarget(target *plan.LockTarget) *plan.LockTarget {
 	return &plan.LockTarget{
 		TableId:            target.TableId,
 		PrimaryColIdxInBat: target.PrimaryColIdxInBat,
-		PrimaryColTyp:      DeepCopyType(target.PrimaryColTyp),
+		PrimaryColTyp:      DeepCopyType(&target.PrimaryColTyp),
 		RefreshTsIdxInBat:  target.RefreshTsIdxInBat,
 		FilterColIdxInBat:  target.FilterColIdxInBat,
 		LockTable:          target.LockTable,
@@ -302,16 +302,14 @@ func DeepCopyDefault(def *plan.Default) *plan.Default {
 	}
 }
 
-func DeepCopyType(typ *plan.Type) *plan.Type {
-	if typ == nil {
-		return nil
-	}
-	return &plan.Type{
+func DeepCopyType(typ *plan.Type) plan.Type {
+	return plan.Type{
 		Id:          typ.Id,
 		NotNullable: typ.NotNullable,
 		Width:       typ.Width,
 		Scale:       typ.Scale,
 		AutoIncr:    typ.AutoIncr,
+		Table:       typ.Table,
 		Enumvalues:  typ.Enumvalues,
 	}
 }

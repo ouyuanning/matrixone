@@ -47,7 +47,7 @@ func (b *LimitBinder) BindExpr(astExpr tree.Expr, depth int32, isRoot bool) (*pl
 		// the valid string should be cast to int64
 		if expr.Typ.Id == int32(types.T_varchar) {
 			targetType := types.T_int64.ToType()
-			planTargetType := makePlan2Type(&targetType)
+			planTargetType := makePlan2TypeValue(&targetType)
 			var err error
 			expr, err = appendCastBeforeExpr(b.GetContext(), expr, planTargetType)
 			if err != nil {
@@ -55,7 +55,7 @@ func (b *LimitBinder) BindExpr(astExpr tree.Expr, depth int32, isRoot bool) (*pl
 			}
 		} else if expr.GetP() != nil {
 			targetType := types.T_int64.ToType()
-			planTargetType := makePlan2Type(&targetType)
+			planTargetType := makePlan2TypeValue(&targetType)
 			return appendCastBeforeExpr(b.GetContext(), expr, planTargetType)
 		} else if expr.GetV() != nil {
 			// SELECT IFNULL(CAST(@var AS BIGINT), 1) => CASE( ISNULL(@var), 1, CAST(@var AS BIGINT))
@@ -73,7 +73,7 @@ func (b *LimitBinder) BindExpr(astExpr tree.Expr, depth int32, isRoot bool) (*pl
 
 			// CAST(@var AS BIGINT)
 			targetType := types.T_int64.ToType()
-			planTargetType := makePlan2Type(&targetType)
+			planTargetType := makePlan2TypeValue(&targetType)
 			arg2, err := appendCastBeforeExpr(b.GetContext(), expr, planTargetType)
 			if err != nil {
 				return nil, err

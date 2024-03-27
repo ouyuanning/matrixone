@@ -121,7 +121,7 @@ func (b *baseBinder) baseBindExpr(astExpr tree.Expr, depth int32, isRoot bool) (
 		if err != nil {
 			return
 		}
-		var typ *Type
+		var typ Type
 		typ, err = getTypeFromAst(b.GetContext(), exprImpl.Type)
 		if err != nil {
 			return
@@ -310,7 +310,7 @@ func (b *baseBinder) baseBindColRef(astExpr *tree.UnresolvedName, depth int32, i
 
 	relPos := NotFound
 	colPos := NotFound
-	var typ *plan.Type
+	var typ plan.Type
 	localErrCtx := errutil.ContextWithNoReport(b.GetContext(), true)
 
 	if len(table) == 0 {
@@ -343,7 +343,7 @@ func (b *baseBinder) baseBindColRef(astExpr *tree.UnresolvedName, depth int32, i
 		}
 	}
 
-	if typ != nil && typ.Id == int32(types.T_enum) && len(typ.GetEnumvalues()) != 0 {
+	if typ.Id == int32(types.T_enum) && len(typ.GetEnumvalues()) != 0 {
 		if err != nil {
 			errutil.ReportError(b.GetContext(), err)
 			return
@@ -365,7 +365,7 @@ func (b *baseBinder) baseBindColRef(astExpr *tree.UnresolvedName, depth int32, i
 			args[idx] = expr
 		}
 		args[len(args)-1] = &Expr{
-			Typ: *typ,
+			Typ: typ,
 			Expr: &plan.Expr_Col{
 				Col: &plan.ColRef{
 					RelPos: relPos,
@@ -382,7 +382,7 @@ func (b *baseBinder) baseBindColRef(astExpr *tree.UnresolvedName, depth int32, i
 		b.boundCols = append(b.boundCols, table+"."+col)
 
 		expr = &plan.Expr{
-			Typ: *typ,
+			Typ: typ,
 		}
 
 		if depth == 0 {
@@ -1053,7 +1053,7 @@ func (b *baseBinder) bindFuncExprImplByAstExpr(name string, astArgs []tree.Expr,
 			return nil, err
 		}
 		typeExpr := &Expr{
-			Typ: *typ,
+			Typ: typ,
 			Expr: &plan.Expr_T{
 				T: &plan.TargetType{},
 			},
@@ -1081,7 +1081,7 @@ func (b *baseBinder) bindFuncExprImplByAstExpr(name string, astArgs []tree.Expr,
 			return nil, err
 		}
 		typeExpr := &Expr{
-			Typ: *typ,
+			Typ: typ,
 			Expr: &plan.Expr_T{
 				T: &plan.TargetType{},
 			},
@@ -1302,7 +1302,7 @@ func BindFuncExprImplByPlanExpr(ctx context.Context, name string, args []*Expr) 
 			return nil, moerr.NewInvalidArg(ctx, name+" function have invalid input args length", len(args))
 		}
 		if args[0].Typ.Id != int32(types.T_varchar) && args[0].Typ.Id != int32(types.T_char) {
-			return appendCastBeforeExpr(ctx, args[0], &Type{
+			return appendCastBeforeExpr(ctx, args[0], Type{
 				Id: int32(types.T_date),
 			})
 		}
@@ -1435,7 +1435,7 @@ func BindFuncExprImplByPlanExpr(ctx context.Context, name string, args []*Expr) 
 			return nil, moerr.NewInvalidArg(ctx, name+" function have invalid input args length", len(args))
 		}
 		if args[0].Typ.Id == int32(types.T_uint64) {
-			args[0], err = appendCastBeforeExpr(ctx, args[0], &plan.Type{
+			args[0], err = appendCastBeforeExpr(ctx, args[0], plan.Type{
 				Id:          int32(types.T_decimal128),
 				NotNullable: args[0].Typ.NotNullable,
 			})
@@ -1448,7 +1448,7 @@ func BindFuncExprImplByPlanExpr(ctx context.Context, name string, args []*Expr) 
 			return nil, moerr.NewInvalidArg(ctx, name+" function have invalid input args length", len(args))
 		}
 		if args[0].Typ.Id == int32(types.T_decimal128) || args[0].Typ.Id == int32(types.T_decimal64) {
-			args[0], err = appendCastBeforeExpr(ctx, args[0], &plan.Type{
+			args[0], err = appendCastBeforeExpr(ctx, args[0], plan.Type{
 				Id:          int32(types.T_float64),
 				NotNullable: args[0].Typ.NotNullable,
 			})
@@ -1469,14 +1469,14 @@ func BindFuncExprImplByPlanExpr(ctx context.Context, name string, args []*Expr) 
 		}
 		if args[0].Typ.Id == int32(types.T_json) {
 			targetTp := types.T_varchar.ToType()
-			args[0], err = appendCastBeforeExpr(ctx, args[0], makePlan2Type(&targetTp), false)
+			args[0], err = appendCastBeforeExpr(ctx, args[0], makePlan2TypeValue(&targetTp), false)
 			if err != nil {
 				return nil, err
 			}
 		}
 		if args[1].Typ.Id == int32(types.T_json) {
 			targetTp := types.T_varchar.ToType()
-			args[1], err = appendCastBeforeExpr(ctx, args[1], makePlan2Type(&targetTp), false)
+			args[1], err = appendCastBeforeExpr(ctx, args[1], makePlan2TypeValue(&targetTp), false)
 			if err != nil {
 				return nil, err
 			}
@@ -1531,7 +1531,7 @@ func BindFuncExprImplByPlanExpr(ctx context.Context, name string, args []*Expr) 
 		case tp.IsMySQLString(), tp.IsInteger():
 		default:
 			targetTp := types.T_varchar.ToType()
-			args[0], err = appendCastBeforeExpr(ctx, args[0], makePlan2Type(&targetTp), false)
+			args[0], err = appendCastBeforeExpr(ctx, args[0], makePlan2TypeValue(&targetTp), false)
 			if err != nil {
 				return nil, err
 			}
@@ -1627,7 +1627,7 @@ func BindFuncExprImplByPlanExpr(ctx context.Context, name string, args []*Expr) 
 
 			for _, rightVal := range rightList.List {
 				if checkNoNeedCast(makeTypeByPlan2Expr(rightVal), typLeft, rightVal.GetLit()) {
-					inExpr, err := appendCastBeforeExpr(ctx, rightVal, &args[0].Typ)
+					inExpr, err := appendCastBeforeExpr(ctx, rightVal, args[0].Typ)
 					if err != nil {
 						return nil, err
 					}
@@ -1708,7 +1708,7 @@ func BindFuncExprImplByPlanExpr(ctx context.Context, name string, args []*Expr) 
 				if argsType[idx].Oid == castType.Oid && castType.Oid.IsDecimal() && argsType[idx].Scale == castType.Scale {
 					continue
 				}
-				typ := makePlan2Type(&castType)
+				typ := makePlan2TypeValue(&castType)
 				args[idx], err = appendCastBeforeExpr(ctx, args[idx], typ)
 				if err != nil {
 					return nil, err
@@ -1748,7 +1748,7 @@ func (b *baseBinder) bindNumVal(astExpr *tree.NumVal, typ *Type) (*Expr, error) 
 	// don't cast 0xXXXX as float64, use the uint64
 	returnDecimalExpr := func(val string) (*Expr, error) {
 		if typ != nil {
-			return appendCastBeforeExpr(b.GetContext(), makePlan2StringConstExprWithType(val), typ)
+			return appendCastBeforeExpr(b.GetContext(), makePlan2StringConstExprWithType(val), *typ)
 		}
 		return makePlan2DecimalExprWithType(b.GetContext(), val)
 	}
@@ -1756,7 +1756,7 @@ func (b *baseBinder) bindNumVal(astExpr *tree.NumVal, typ *Type) (*Expr, error) 
 	returnHexNumExpr := func(val string, isBin ...bool) (*Expr, error) {
 		if typ != nil {
 			isFloat := typ.Id == int32(types.T_float32) || typ.Id == int32(types.T_float64)
-			return appendCastBeforeExpr(b.GetContext(), makePlan2StringConstExprWithType(val, isBin[0]), typ, isBin[0], isFloat)
+			return appendCastBeforeExpr(b.GetContext(), makePlan2StringConstExprWithType(val, isBin[0]), *typ, isBin[0], isFloat)
 		}
 		return makePlan2StringConstExprWithType(val, isBin...), nil
 	}
@@ -1774,7 +1774,7 @@ func (b *baseBinder) bindNumVal(astExpr *tree.NumVal, typ *Type) (*Expr, error) 
 		}
 		expr := makePlan2Int64ConstExprWithType(val)
 		if typ != nil && typ.Id == int32(types.T_varchar) {
-			return appendCastBeforeExpr(b.GetContext(), expr, typ)
+			return appendCastBeforeExpr(b.GetContext(), expr, *typ)
 		}
 		return expr, nil
 	case tree.P_uint64:
@@ -1821,7 +1821,7 @@ func (b *baseBinder) bindNumVal(astExpr *tree.NumVal, typ *Type) (*Expr, error) 
 					Typ: *typ,
 				}, nil
 			}
-			return appendCastBeforeExpr(b.GetContext(), makePlan2StringConstExprWithType(astExpr.String()), typ)
+			return appendCastBeforeExpr(b.GetContext(), makePlan2StringConstExprWithType(astExpr.String()), *typ)
 		}
 		d128, scale, err := types.Parse128(astExpr.String())
 		if err != nil {
@@ -1889,18 +1889,18 @@ func (b *baseBinder) GetContext() context.Context { return b.sysCtx }
 
 // --- util functions ----
 
-func appendCastBeforeExpr(ctx context.Context, expr *Expr, toType *Type, isBin ...bool) (*Expr, error) {
+func appendCastBeforeExpr(ctx context.Context, expr *Expr, toType Type, isBin ...bool) (*Expr, error) {
 	toType.NotNullable = expr.Typ.NotNullable
 	argsType := []types.Type{
 		makeTypeByPlan2Expr(expr),
-		makeTypeByPlan2Type(toType),
+		makeTypeByPlan2Type(&toType),
 	}
 	fGet, err := function.GetFunctionByName(ctx, "cast", argsType)
 	if err != nil {
 		return nil, err
 	}
 	// for 0xXXXX, if the value is over 1<<53-1, when covert it into float64,it will lost, so just change it into uint64
-	typ := *toType
+	typ := toType
 	if len(isBin) == 2 && isBin[0] && isBin[1] {
 		typ.Id = int32(types.T_uint64)
 	}
@@ -1933,7 +1933,7 @@ func resetDateFunctionArgs(ctx context.Context, dateExpr *Expr, intervalExpr *Ex
 		return nil, err
 	}
 
-	intervalTypeInFunction := &plan.Type{
+	intervalTypeInFunction := plan.Type{
 		Id: int32(types.T_int64),
 	}
 
@@ -1950,7 +1950,7 @@ func resetDateFunctionArgs(ctx context.Context, dateExpr *Expr, intervalExpr *Ex
 			switch returnType {
 			case types.Day, types.Week, types.Month, types.Quarter, types.Year:
 			default:
-				dateExpr, err = appendCastBeforeExpr(ctx, dateExpr, &plan.Type{
+				dateExpr, err = appendCastBeforeExpr(ctx, dateExpr, plan.Type{
 					Id: int32(types.T_datetime),
 				})
 
@@ -1972,7 +1972,7 @@ func resetDateFunctionArgs(ctx context.Context, dateExpr *Expr, intervalExpr *Ex
 		switch intervalType {
 		case types.Day, types.Week, types.Month, types.Quarter, types.Year:
 		default:
-			dateExpr, err = appendCastBeforeExpr(ctx, dateExpr, &plan.Type{
+			dateExpr, err = appendCastBeforeExpr(ctx, dateExpr, plan.Type{
 				Id: int32(types.T_datetime),
 			})
 

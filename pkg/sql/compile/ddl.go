@@ -598,7 +598,7 @@ func (s *Scope) AlterTableInplace(c *Compile) error {
 			col := &plan.ColDef{
 				Name: act.AddColumn.Name,
 				Alg:  plan.CompressType_Lz4,
-				Typ:  *act.AddColumn.Type,
+				Typ:  act.AddColumn.Type,
 			}
 			var pos int32
 			cols, pos, err = getAddColPos(cols, col, act.AddColumn.PreName, act.AddColumn.Pos)

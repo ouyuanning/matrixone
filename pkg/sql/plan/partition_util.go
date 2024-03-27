@@ -282,7 +282,7 @@ func checkPartitionColumnValue(binder *PartitionBinder, colType *Type, colExpr *
 		}
 	}
 
-	if castExpr, err := forceCastExpr(binder.GetContext(), val, colType); err != nil {
+	if castExpr, err := forceCastExpr(binder.GetContext(), val, *colType); err != nil {
 		return err
 	} else {
 		if castVal, err := EvalPlanExpr(binder.GetContext(), castExpr, binder.builder.compCtx.GetProcess()); err != nil {
@@ -596,7 +596,7 @@ func evalPartitionFieldExpr(ctx context.Context, process *process.Process, colTy
 		return "", err
 	}
 
-	castExpr, err := forceCastExpr(ctx, evalExpr, colType)
+	castExpr, err := forceCastExpr(ctx, evalExpr, *colType)
 	if err != nil {
 		return "", err
 	}
