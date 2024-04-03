@@ -65,7 +65,6 @@ func DeepCopyOnDupliateKeyCtx(ctx *plan.OnDuplicateKeyCtx) *plan.OnDuplicateKeyC
 		return nil
 	}
 	newCtx := &plan.OnDuplicateKeyCtx{
-		TableDef:       DeepCopyTableDef(ctx.TableDef, true),
 		OnDuplicateIdx: make([]int32, len(ctx.OnDuplicateIdx)),
 	}
 
@@ -141,9 +140,8 @@ func DeepCopyPreInsertUkCtx(ctx *plan.PreInsertUkCtx) *plan.PreInsertUkCtx {
 	newCtx := &plan.PreInsertUkCtx{
 		Columns:  make([]int32, len(ctx.Columns)),
 		PkColumn: ctx.PkColumn,
-		PkType:   DeepCopyType(&ctx.PkType),
-		UkType:   DeepCopyType(&ctx.UkType),
-		TableDef: DeepCopyTableDef(ctx.TableDef, true),
+		PkType:   ctx.PkType,
+		UkType:   ctx.UkType,
 	}
 	copy(newCtx.Columns, ctx.Columns)
 
