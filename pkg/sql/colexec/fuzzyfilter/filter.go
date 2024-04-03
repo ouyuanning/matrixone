@@ -308,8 +308,8 @@ func (arg *Argument) appendCollisionKey(proc *process.Process, idx int, bat *bat
 // rbat will contain the keys that have hash collisions
 func (arg *Argument) generate(proc *process.Process) error {
 	rbat := batch.NewWithSize(1)
-	rbat.SetVector(0, proc.GetVector(plan.MakeTypeByPlan2Type(arg.PkTyp)))
-	arg.pass2RuntimeFilter = proc.GetVector(plan.MakeTypeByPlan2Type(arg.PkTyp))
+	rbat.SetVector(0, proc.GetVector(plan.MakeTypeByPlan2Type(&arg.PkTyp)))
+	arg.pass2RuntimeFilter = proc.GetVector(plan.MakeTypeByPlan2Type(&arg.PkTyp))
 	arg.rbat = rbat
 	return nil
 }

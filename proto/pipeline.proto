@@ -104,7 +104,7 @@ message Group {
   uint64 ibucket = 2;
   uint64 nbucket = 3;
   repeated plan.Expr  exprs = 4;
-  repeated plan.Type  types = 5;
+  repeated plan.Type  types = 5 [(gogoproto.nullable) = false];
   repeated Aggregate  aggs = 6;
   repeated MultiArguemnt MultiAggs = 7;
   bool isShuffle = 8;
@@ -334,7 +334,7 @@ message Product {
 
 message IndexJoin {
   repeated int32 result = 1;
-  repeated plan.Type  types = 2; [(gogoproto.nullable) = false];
+  repeated plan.Type  types = 2 [(gogoproto.nullable) = false];
   repeated plan.RuntimeFilterSpec runtime_filter_build_list = 3;
 }
 

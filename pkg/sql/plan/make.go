@@ -398,6 +398,7 @@ func rewriteDecimalTypeIfNecessary(typ *plan.Type) *plan.Type {
 }
 
 var MakePlan2Type = makePlan2Type
+var MakePlan2TypeValue = makePlan2TypeValue
 
 func makePlan2Type(typ *types.Type) *plan.Type {
 	return &plan.Type{

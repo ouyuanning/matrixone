@@ -656,7 +656,7 @@ func (arg *Argument) CopyToPipelineTarget() []*pipeline.LockTarget {
 		targets[i] = &pipeline.LockTarget{
 			TableId:            target.tableID,
 			PrimaryColIdxInBat: target.primaryColumnIndexInBatch,
-			PrimaryColTyp:      plan.MakePlan2Type(&target.primaryColumnType),
+			PrimaryColTyp:      plan.MakePlan2TypeValue(&target.primaryColumnType),
 			RefreshTsIdxInBat:  target.refreshTimestampIndexInBatch,
 			FilterColIdxInBat:  target.filterColIndexInBatch,
 			LockTable:          target.lockTable,

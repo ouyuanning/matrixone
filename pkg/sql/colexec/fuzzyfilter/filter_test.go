@@ -92,7 +92,7 @@ func init() {
 
 func newArgument(typ types.Type) *Argument {
 	arg := new(Argument)
-	arg.PkTyp = plan.MakePlan2Type(&typ)
+	arg.PkTyp = plan.MakePlan2TypeValue(&typ)
 	return arg
 }
 
