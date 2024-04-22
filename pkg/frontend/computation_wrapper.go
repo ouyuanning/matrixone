@@ -317,59 +317,63 @@ func (cwft *TxnComputationWrapper) Compile(requestCtx context.Context, fill func
 		*/
 	}
 
-	addr := ""
-	if len(getGlobalPu().ClusterNodes) > 0 {
-		addr = getGlobalPu().ClusterNodes[0].Addr
-	}
 	cwft.proc.Ctx = txnCtx
 	cwft.proc.FileService = getGlobalPu().FileService
 
-	var tenant string
-	tInfo := cwft.ses.GetTenantInfo()
-	if tInfo != nil {
-		tenant = tInfo.GetTenant()
-	}
-
-	stats := statistic.StatsInfoFromContext(requestCtx)
-	stats.CompileStart()
-	defer stats.CompileEnd()
-	cwft.compile = compile.NewCompile(
-		addr,
-		cwft.ses.GetDatabaseName(),
-		cwft.ses.GetSql(),
-		tenant,
-		cwft.ses.GetUserName(),
-		txnCtx,
-		cwft.ses.GetStorage(),
-		cwft.proc,
-		cwft.stmt,
-		cwft.ses.GetIsInternal(),
-		deepcopy.Copy(cwft.ses.getCNLabels()).(map[string]string),
-		getStatementStartAt(requestCtx),
-	)
-	defer func() {
-		if err != nil {
-			cwft.compile.Release()
-		}
-	}()
-	cwft.compile.SetBuildPlanFunc(func() (*plan2.Plan, error) {
-		plan, err := buildPlan(requestCtx, cwft.ses, cwft.ses.GetTxnCompileCtx(), cwft.stmt)
-		if err != nil {
-			return nil, err
-		}
-		if plan.IsPrepare {
-			_, _, err = plan2.ResetPreparePlan(cwft.ses.GetTxnCompileCtx(), plan)
-		}
-		return plan, err
-	})
-
-	if _, ok := cwft.stmt.(*tree.ExplainAnalyze); ok {
-		fill = func(bat *batch.Batch) error { return nil }
-	}
-	err = cwft.compile.Compile(txnCtx, cwft.plan, fill)
+	cwft.compile, err = buildCompile(requestCtx, txnCtx, cwft.ses, cwft.proc, originSQL, cwft.stmt, cwft.plan, fill)
 	if err != nil {
 		return nil, err
 	}
+	// stats := statistic.StatsInfoFromContext(requestCtx)
+	// stats.CompileStart()
+	// defer stats.CompileEnd()
+	// addr := ""
+	// if len(getGlobalPu().ClusterNodes) > 0 {
+	// 	addr = getGlobalPu().ClusterNodes[0].Addr
+	// }
+	// var tenant string
+	// tInfo := cwft.ses.GetTenantInfo()
+	// if tInfo != nil {
+	// 	tenant = tInfo.GetTenant()
+	// }
+	// cwft.compile = compile.NewCompile(
+	// 	addr,
+	// 	cwft.ses.GetDatabaseName(),
+	// 	cwft.ses.GetSql(),
+	// 	tenant,
+	// 	cwft.ses.GetUserName(),
+	// 	txnCtx,
+	// 	cwft.ses.GetStorage(),
+	// 	cwft.proc,
+	// 	cwft.stmt,
+	// 	cwft.ses.GetIsInternal(),
+	// 	deepcopy.Copy(cwft.ses.getCNLabels()).(map[string]string),
+	// 	getStatementStartAt(requestCtx),
+	// )
+	// defer func() {
+	// 	if err != nil {
+	// 		cwft.compile.Release()
+	// 	}
+	// }()
+	// cwft.compile.SetBuildPlanFunc(func() (*plan2.Plan, error) {
+	// 	plan, err := buildPlan(requestCtx, cwft.ses, cwft.ses.GetTxnCompileCtx(), cwft.stmt)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	if plan.IsPrepare {
+	// 		_, _, err = plan2.ResetPreparePlan(cwft.ses.GetTxnCompileCtx(), plan)
+	// 	}
+	// 	return plan, err
+	// })
+
+	// if _, ok := cwft.stmt.(*tree.ExplainAnalyze); ok {
+	// 	fill = func(bat *batch.Batch) error { return nil }
+	// }
+	// err = cwft.compile.Compile(txnCtx, cwft.plan, fill)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// cwft.compile.SetOriginSQL(originSQL)
 	// check if it is necessary to initialize the temporary engine
 	if cwft.compile.NeedInitTempEngine(cwft.ses.IfInitedTempEngine()) {
 		// 0. init memory-non-dist storage
@@ -412,7 +416,6 @@ func (cwft *TxnComputationWrapper) Compile(requestCtx context.Context, fill func
 
 		cwft.ses.EnableInitTempEngine()
 	}
-	cwft.compile.SetOriginSQL(originSQL)
 	return cwft.compile, err
 }
 
@@ -518,4 +521,69 @@ func replacePlan(requestCtx context.Context, ses *Session, cwft *TxnComputationW
 		}
 	}
 	return preparePlan.Plan, prepareStmt.PrepareStmt, originSQL, nil
+}
+
+func buildCompile(
+	requestCtx context.Context,
+	txnCtx context.Context,
+	ses FeSession,
+	proc *process.Process,
+	originSQL string,
+	stmt tree.Statement,
+	plan *plan2.Plan,
+	fill func(*batch.Batch) error,
+) (retCompile *compile.Compile, err error) {
+	stats := statistic.StatsInfoFromContext(requestCtx)
+	stats.CompileStart()
+	defer stats.CompileEnd()
+
+	addr := ""
+	if len(getGlobalPu().ClusterNodes) > 0 {
+		addr = getGlobalPu().ClusterNodes[0].Addr
+	}
+
+	var tenant string
+	tInfo := ses.GetTenantInfo()
+	if tInfo != nil {
+		tenant = tInfo.GetTenant()
+	}
+	retCompile = compile.NewCompile(
+		addr,
+		ses.GetDatabaseName(),
+		ses.GetSql(),
+		tenant,
+		ses.GetUserName(),
+		txnCtx,
+		ses.GetStorage(),
+		proc,
+		stmt,
+		ses.GetIsInternal(),
+		deepcopy.Copy(ses.getCNLabels()).(map[string]string),
+		getStatementStartAt(requestCtx),
+	)
+	defer func() {
+		if err != nil && retCompile != nil {
+			retCompile.Release()
+		}
+	}()
+
+	if _, ok := stmt.(*tree.ExplainAnalyze); ok {
+		fill = func(bat *batch.Batch) error { return nil }
+	}
+	retCompile.SetBuildPlanFunc(func() (*plan2.Plan, error) {
+		newPlan, err := buildPlan(requestCtx, ses, ses.GetTxnCompileCtx(), stmt)
+		if err != nil {
+			return nil, err
+		}
+		if newPlan.IsPrepare {
+			_, _, err = plan2.ResetPreparePlan(ses.GetTxnCompileCtx(), newPlan)
+		}
+		return newPlan, err
+	})
+	err = retCompile.Compile(txnCtx, plan, fill)
+	if err != nil {
+		return nil, err
+	}
+	retCompile.SetOriginSQL(originSQL)
+	return
 }
