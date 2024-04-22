@@ -1181,8 +1181,12 @@ func handleExplainStmt(_ context.Context, ses FeSession, stmt *tree.ExplainStmt)
 	return doExplainStmt(ses.(*Session), stmt)
 }
 
-func doPrepareStmt(ctx context.Context, ses *Session, st *tree.PrepareStmt, sql string, paramTypes []byte) (*PrepareStmt, error) {
+func doPrepareStmt(ctx context.Context, txnCtx context.Context, ses *Session, st *tree.PrepareStmt, sql string, paramTypes []byte) (*PrepareStmt, error) {
 	preparePlan, err := buildPlan(ctx, ses, ses.GetTxnCompileCtx(), st)
+	if err != nil {
+		return nil, err
+	}
+	comp, err := buildCompile(ctx, txnCtx, ses, ses.proc, sql, st.Stmt, preparePlan.GetDcl().GetPrepare().Plan, ses.GetOutputCallback())
 	if err != nil {
 		return nil, err
 	}
@@ -1192,6 +1196,7 @@ func doPrepareStmt(ctx context.Context, ses *Session, st *tree.PrepareStmt, sql 
 		Sql:                 sql,
 		PreparePlan:         preparePlan,
 		PrepareStmt:         st.Stmt,
+		compile:             comp,
 		getFromSendLongData: make(map[int]struct{}),
 	}
 	if len(paramTypes) > 0 {
@@ -1204,11 +1209,11 @@ func doPrepareStmt(ctx context.Context, ses *Session, st *tree.PrepareStmt, sql 
 }
 
 // handlePrepareStmt
-func handlePrepareStmt(ctx context.Context, ses FeSession, st *tree.PrepareStmt, sql string) (*PrepareStmt, error) {
-	return doPrepareStmt(ctx, ses.(*Session), st, sql, nil)
+func handlePrepareStmt(ctx context.Context, txnCtx context.Context, ses FeSession, st *tree.PrepareStmt, sql string) (*PrepareStmt, error) {
+	return doPrepareStmt(ctx, txnCtx, ses.(*Session), st, sql, nil)
 }
 
-func doPrepareString(ctx context.Context, ses *Session, st *tree.PrepareString) (*PrepareStmt, error) {
+func doPrepareString(ctx context.Context, txnCtx context.Context, ses *Session, st *tree.PrepareString) (*PrepareStmt, error) {
 	v, err := ses.GetGlobalVar("lower_case_table_names")
 	if err != nil {
 		return nil, err
@@ -1228,9 +1233,14 @@ func doPrepareString(ctx context.Context, ses *Session, st *tree.PrepareString) 
 	if err != nil {
 		return nil, err
 	}
+	comp, err := buildCompile(ctx, txnCtx, ses, ses.proc, st.Sql, stmts[0], preparePlan.GetDcl().GetPrepare().Plan, ses.GetOutputCallback())
+	if err != nil {
+		return nil, err
+	}
 	prepareStmt := &PrepareStmt{
 		Name:        preparePlan.GetDcl().GetPrepare().GetName(),
 		Sql:         st.Sql,
+		compile:     comp,
 		PreparePlan: preparePlan,
 		PrepareStmt: stmts[0],
 	}
@@ -1240,8 +1250,8 @@ func doPrepareString(ctx context.Context, ses *Session, st *tree.PrepareString) 
 }
 
 // handlePrepareString
-func handlePrepareString(ctx context.Context, ses FeSession, st *tree.PrepareString) (*PrepareStmt, error) {
-	return doPrepareString(ctx, ses.(*Session), st)
+func handlePrepareString(ctx context.Context, txnCtx context.Context, ses FeSession, st *tree.PrepareString) (*PrepareStmt, error) {
+	return doPrepareString(ctx, txnCtx, ses.(*Session), st)
 }
 
 func doDeallocate(ctx context.Context, ses *Session, st *tree.Deallocate) error {
