@@ -747,7 +747,7 @@ func (tbl *txnTable) rangesOnePart(
 	}
 
 	// for dynamic parameter, substitute param ref and const fold cast expression here to improve performance
-	newExprs, err := plan2.ConstandFoldList(exprs, tbl.proc.Load(), true)
+	newExprs, err := plan2.ConstantFoldList(exprs, tbl.proc.Load(), true)
 	if err == nil {
 		exprs = newExprs
 	}

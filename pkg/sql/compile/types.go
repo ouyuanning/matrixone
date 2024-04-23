@@ -278,6 +278,9 @@ type Compile struct {
 	disableRetry bool
 
 	lastAllocID int32
+
+	isPrepare       bool
+	cantSavePrepare bool
 }
 
 type RemoteReceivRegInfo struct {

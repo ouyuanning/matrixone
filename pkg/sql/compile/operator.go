@@ -17,6 +17,7 @@ package compile
 import (
 	"context"
 	"fmt"
+
 	"github.com/matrixorigin/matrixone/pkg/sql/colexec/aggexec"
 
 	"github.com/matrixorigin/matrixone/pkg/sql/colexec/indexbuild"
@@ -27,7 +28,6 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/common/moerr"
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/types"
-	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/defines"
 	"github.com/matrixorigin/matrixone/pkg/pb/pipeline"
 	"github.com/matrixorigin/matrixone/pkg/pb/plan"
@@ -1125,19 +1125,9 @@ func constructOffset(n *plan.Node, proc *process.Process) *offset.Argument {
 }
 */
 
-func constructLimit(n *plan.Node, proc *process.Process) *limit.Argument {
-	executor, err := colexec.NewExpressionExecutor(proc, n.Limit)
-	if err != nil {
-		panic(err)
-	}
-	defer executor.Free()
-	vec, err := executor.Eval(proc, []*batch.Batch{constBat})
-	if err != nil {
-		panic(err)
-	}
-
+func constructLimit(val int64) *limit.Argument {
 	arg := limit.NewArgument()
-	arg.Limit = uint64(vector.MustFixedCol[int64](vec)[0])
+	arg.Limit = uint64(val)
 	return arg
 }
 
@@ -1448,35 +1438,15 @@ func constructMergeTop(n *plan.Node, topN int64) *mergetop.Argument {
 	return arg
 }
 
-func constructMergeOffset(n *plan.Node, proc *process.Process) *mergeoffset.Argument {
-	executor, err := colexec.NewExpressionExecutor(proc, n.Offset)
-	if err != nil {
-		panic(err)
-	}
-	defer executor.Free()
-	vec, err := executor.Eval(proc, []*batch.Batch{constBat})
-	if err != nil {
-		panic(err)
-	}
-
+func constructMergeOffset(val int64) *mergeoffset.Argument {
 	arg := mergeoffset.NewArgument()
-	arg.Offset = uint64(vector.MustFixedCol[int64](vec)[0])
+	arg.Offset = uint64(val)
 	return arg
 }
 
-func constructMergeLimit(n *plan.Node, proc *process.Process) *mergelimit.Argument {
-	executor, err := colexec.NewExpressionExecutor(proc, n.Limit)
-	if err != nil {
-		panic(err)
-	}
-	defer executor.Free()
-	vec, err := executor.Eval(proc, []*batch.Batch{constBat})
-	if err != nil {
-		panic(err)
-	}
-
+func constructMergeLimit(val int64) *mergelimit.Argument {
 	arg := mergelimit.NewArgument()
-	arg.Limit = uint64(vector.MustFixedCol[int64](vec)[0])
+	arg.Limit = uint64(val)
 	return arg
 }
 

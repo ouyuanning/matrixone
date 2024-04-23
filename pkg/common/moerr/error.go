@@ -218,6 +218,7 @@ const (
 	ErrWaiterPaused               uint16 = 20633
 	ErrRetryForCNRollingRestart   uint16 = 20634
 	ErrNewTxnInCNRollingRestart   uint16 = 20635
+	ErrCantCompileForPrepare      uint16 = 20636
 
 	// Group 7: lock service
 	// ErrDeadLockDetected lockservice has detected a deadlock and should abort the transaction if it receives this error
@@ -436,6 +437,7 @@ var errorMsgRefer = map[uint16]moErrorMsgItem{
 	ErrWaiterPaused:               {ER_UNKNOWN_ERROR, []string{MySQLDefaultSqlState}, "waiter is paused"},
 	ErrRetryForCNRollingRestart:   {ER_UNKNOWN_ERROR, []string{MySQLDefaultSqlState}, "retry for CN rolling restart"},
 	ErrNewTxnInCNRollingRestart:   {ER_UNKNOWN_ERROR, []string{MySQLDefaultSqlState}, "new txn in CN rolling restart"},
+	ErrCantCompileForPrepare:      {ER_UNKNOWN_ERROR, []string{MySQLDefaultSqlState}, "can not compile for prepare"},
 
 	// Group 7: lock service
 	ErrDeadLockDetected:     {ER_UNKNOWN_ERROR, []string{MySQLDefaultSqlState}, "deadlock detected"},
@@ -1375,6 +1377,10 @@ func NewErrDuplicateKeyName(ctx context.Context, fkName any) *Error {
 
 func NewErrFKNoReferencedRow2(ctx context.Context) *Error {
 	return newError(ctx, ErrFKNoReferencedRow2)
+}
+
+func NewCantCompileForPrepare(ctx context.Context) *Error {
+	return newError(ctx, ErrCantCompileForPrepare)
 }
 
 var contextFunc atomic.Value

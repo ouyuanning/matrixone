@@ -220,69 +220,73 @@ func (cwft *TxnComputationWrapper) Compile(requestCtx context.Context, fill func
 	defer span.End(trace.WithStatementExtra(cwft.ses.GetTxnId(), cwft.ses.GetStmtId(), cwft.ses.GetSqlOfStmt()))
 
 	var err error
-	defer RecordStatementTxnID(requestCtx, cwft.ses)
-	if cwft.ses.IfInitedTempEngine() {
-		requestCtx = context.WithValue(requestCtx, defines.TemporaryTN{}, cwft.ses.GetTempTableStorage())
-		cwft.ses.SetRequestContext(requestCtx)
-		cwft.proc.Ctx = context.WithValue(cwft.proc.Ctx, defines.TemporaryTN{}, cwft.ses.GetTempTableStorage())
-		cwft.ses.GetTxnHandler().AttachTempStorageToTxnCtx()
-	}
+	// defer RecordStatementTxnID(requestCtx, cwft.ses)
+	// if cwft.ses.IfInitedTempEngine() {
+	// 	requestCtx = context.WithValue(requestCtx, defines.TemporaryTN{}, cwft.ses.GetTempTableStorage())
+	// 	cwft.ses.SetRequestContext(requestCtx)
+	// 	cwft.proc.Ctx = context.WithValue(cwft.proc.Ctx, defines.TemporaryTN{}, cwft.ses.GetTempTableStorage())
+	// 	cwft.ses.GetTxnHandler().AttachTempStorageToTxnCtx()
+	// }
 
-	txnHandler := cwft.ses.GetTxnHandler()
-	var txnCtx context.Context
-	txnCtx, cwft.proc.TxnOperator, err = txnHandler.GetTxn()
+	// txnHandler := cwft.ses.GetTxnHandler()
+	// var txnCtx context.Context
+	// txnCtx, cwft.proc.TxnOperator, err = txnHandler.GetTxn()
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// txnCtx = statistic.EnsureStatsInfoCanBeFound(txnCtx, requestCtx)
+
+	// // Increase the statement ID and update snapshot TS before build plan, because the
+	// // snapshot TS is used when build plan.
+	// // NB: In internal executor, we should also do the same action, which is increasing
+	// // statement ID and updating snapshot TS.
+	// // See `func (exec *txnExecutor) Exec(sql string)` for details.
+	// txnOp := cwft.proc.TxnOperator
+	// cwft.ses.SetTxnId(txnOp.Txn().ID)
+	// //non derived statement
+	// if txnOp != nil && !cwft.ses.IsDerivedStmt() {
+	// 	//startStatement has been called
+	// 	ok, _ := cwft.ses.GetTxnHandler().calledStartStmt()
+	// 	if !ok {
+	// 		txnOp.GetWorkspace().StartStatement()
+	// 		cwft.ses.GetTxnHandler().enableStartStmt(txnOp.Txn().ID)
+	// 	}
+
+	// 	//increase statement id
+	// 	err = txnOp.GetWorkspace().IncrStatementID(requestCtx, false)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	cwft.ses.GetTxnHandler().enableIncrStmt(txnOp.Txn().ID)
+	// }
+
+	// cacheHit := cwft.plan != nil
+	// if !cacheHit {
+	// 	cwft.plan, err = buildPlan(requestCtx, cwft.ses, cwft.ses.GetTxnCompileCtx(), cwft.stmt)
+	// } else if cwft.ses != nil && cwft.ses.GetTenantInfo() != nil && !cwft.ses.IsBackgroundSession() {
+	// 	var accId uint32
+	// 	accId, err = defines.GetAccountId(requestCtx)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	cwft.ses.SetAccountId(accId)
+	// 	err = authenticateCanExecuteStatementAndPlan(requestCtx, cwft.ses.(*Session), cwft.stmt, cwft.plan)
+	// }
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// if !cwft.ses.IsBackgroundSession() {
+	// 	cwft.ses.SetPlan(cwft.plan)
+	// 	if ids := isResultQuery(cwft.plan); ids != nil {
+	// 		if err = checkPrivilege(ids, requestCtx, cwft.ses.(*Session)); err != nil {
+	// 			return nil, err
+	// 		}
+	// 	}
+	// }
+	cwft.plan, err = createPlan(requestCtx, cwft.ses, cwft.proc, cwft.stmt, cwft.plan)
 	if err != nil {
 		return nil, err
-	}
-
-	txnCtx = statistic.EnsureStatsInfoCanBeFound(txnCtx, requestCtx)
-
-	// Increase the statement ID and update snapshot TS before build plan, because the
-	// snapshot TS is used when build plan.
-	// NB: In internal executor, we should also do the same action, which is increasing
-	// statement ID and updating snapshot TS.
-	// See `func (exec *txnExecutor) Exec(sql string)` for details.
-	txnOp := cwft.proc.TxnOperator
-	cwft.ses.SetTxnId(txnOp.Txn().ID)
-	//non derived statement
-	if txnOp != nil && !cwft.ses.IsDerivedStmt() {
-		//startStatement has been called
-		ok, _ := cwft.ses.GetTxnHandler().calledStartStmt()
-		if !ok {
-			txnOp.GetWorkspace().StartStatement()
-			cwft.ses.GetTxnHandler().enableStartStmt(txnOp.Txn().ID)
-		}
-
-		//increase statement id
-		err = txnOp.GetWorkspace().IncrStatementID(requestCtx, false)
-		if err != nil {
-			return nil, err
-		}
-		cwft.ses.GetTxnHandler().enableIncrStmt(txnOp.Txn().ID)
-	}
-
-	cacheHit := cwft.plan != nil
-	if !cacheHit {
-		cwft.plan, err = buildPlan(requestCtx, cwft.ses, cwft.ses.GetTxnCompileCtx(), cwft.stmt)
-	} else if cwft.ses != nil && cwft.ses.GetTenantInfo() != nil && !cwft.ses.IsBackgroundSession() {
-		var accId uint32
-		accId, err = defines.GetAccountId(requestCtx)
-		if err != nil {
-			return nil, err
-		}
-		cwft.ses.SetAccountId(accId)
-		err = authenticateCanExecuteStatementAndPlan(requestCtx, cwft.ses.(*Session), cwft.stmt, cwft.plan)
-	}
-	if err != nil {
-		return nil, err
-	}
-	if !cwft.ses.IsBackgroundSession() {
-		cwft.ses.SetPlan(cwft.plan)
-		if ids := isResultQuery(cwft.plan); ids != nil {
-			if err = checkPrivilege(ids, requestCtx, cwft.ses.(*Session)); err != nil {
-				return nil, err
-			}
-		}
 	}
 
 	if _, ok := cwft.stmt.(*tree.Execute); ok {
@@ -317,10 +321,7 @@ func (cwft *TxnComputationWrapper) Compile(requestCtx context.Context, fill func
 		*/
 	}
 
-	cwft.proc.Ctx = txnCtx
-	cwft.proc.FileService = getGlobalPu().FileService
-
-	cwft.compile, err = buildCompile(requestCtx, txnCtx, cwft.ses, cwft.proc, originSQL, cwft.stmt, cwft.plan, fill)
+	cwft.compile, err = createCompile(requestCtx, cwft.ses, cwft.proc, originSQL, cwft.stmt, cwft.plan, fill, false)
 	if err != nil {
 		return nil, err
 	}
@@ -375,47 +376,47 @@ func (cwft *TxnComputationWrapper) Compile(requestCtx context.Context, fill func
 	// }
 	// cwft.compile.SetOriginSQL(originSQL)
 	// check if it is necessary to initialize the temporary engine
-	if cwft.compile.NeedInitTempEngine(cwft.ses.IfInitedTempEngine()) {
-		// 0. init memory-non-dist storage
-		var tnStore *metadata.TNService
-		tnStore, err = cwft.ses.SetTempTableStorage(cwft.GetClock())
-		if err != nil {
-			return nil, err
-		}
+	// if cwft.compile.NeedInitTempEngine(cwft.ses.IfInitedTempEngine()) {
+	// 	// 0. init memory-non-dist storage
+	// 	var tnStore *metadata.TNService
+	// 	tnStore, err = cwft.ses.SetTempTableStorage(cwft.GetClock())
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
 
-		// temporary storage is passed through Ctx
-		requestCtx = context.WithValue(requestCtx, defines.TemporaryTN{}, cwft.ses.GetTempTableStorage())
+	// 	// temporary storage is passed through Ctx
+	// 	requestCtx = context.WithValue(requestCtx, defines.TemporaryTN{}, cwft.ses.GetTempTableStorage())
 
-		// 1. init memory-non-dist engine
-		tempEngine := memoryengine.New(
-			requestCtx,
-			memoryengine.NewDefaultShardPolicy(
-				mpool.MustNewZeroNoFixed(),
-			),
-			memoryengine.RandomIDGenerator,
-			clusterservice.NewMOCluster(
-				nil,
-				0,
-				clusterservice.WithDisableRefresh(),
-				clusterservice.WithServices(nil, []metadata.TNService{
-					*tnStore,
-				})),
-		)
+	// 	// 1. init memory-non-dist engine
+	// 	tempEngine := memoryengine.New(
+	// 		requestCtx,
+	// 		memoryengine.NewDefaultShardPolicy(
+	// 			mpool.MustNewZeroNoFixed(),
+	// 		),
+	// 		memoryengine.RandomIDGenerator,
+	// 		clusterservice.NewMOCluster(
+	// 			nil,
+	// 			0,
+	// 			clusterservice.WithDisableRefresh(),
+	// 			clusterservice.WithServices(nil, []metadata.TNService{
+	// 				*tnStore,
+	// 			})),
+	// 	)
 
-		// 2. bind the temporary engine to the session and txnHandler
-		_ = cwft.ses.SetTempEngine(requestCtx, tempEngine)
-		cwft.compile.SetTempEngine(requestCtx, tempEngine)
-		txnHandler.SetTempEngine(tempEngine)
-		cwft.ses.GetTxnHandler().AttachTempStorageToTxnCtx()
+	// 	// 2. bind the temporary engine to the session and txnHandler
+	// 	_ = cwft.ses.SetTempEngine(requestCtx, tempEngine)
+	// 	cwft.compile.SetTempEngine(requestCtx, tempEngine)
+	// 	txnHandler.SetTempEngine(tempEngine)
+	// 	cwft.ses.GetTxnHandler().AttachTempStorageToTxnCtx()
 
-		// 3. init temp-db to store temporary relations
-		err = tempEngine.Create(requestCtx, defines.TEMPORARY_DBNAME, cwft.ses.GetTxnHandler().txnOperator)
-		if err != nil {
-			return nil, err
-		}
+	// 	// 3. init temp-db to store temporary relations
+	// 	err = tempEngine.Create(requestCtx, defines.TEMPORARY_DBNAME, cwft.ses.GetTxnHandler().txnOperator)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
 
-		cwft.ses.EnableInitTempEngine()
-	}
+	// 	cwft.ses.EnableInitTempEngine()
+	// }
 	return cwft.compile, err
 }
 
@@ -523,16 +524,18 @@ func replacePlan(requestCtx context.Context, ses *Session, cwft *TxnComputationW
 	return preparePlan.Plan, prepareStmt.PrepareStmt, originSQL, nil
 }
 
-func buildCompile(
+func createCompile(
 	requestCtx context.Context,
-	txnCtx context.Context,
 	ses FeSession,
 	proc *process.Process,
 	originSQL string,
 	stmt tree.Statement,
 	plan *plan2.Plan,
 	fill func(*batch.Batch) error,
+	isPrepare bool,
 ) (retCompile *compile.Compile, err error) {
+	defer RecordStatementTxnID(requestCtx, ses)
+
 	stats := statistic.StatsInfoFromContext(requestCtx)
 	stats.CompileStart()
 	defer stats.CompileEnd()
@@ -553,13 +556,14 @@ func buildCompile(
 		ses.GetSql(),
 		tenant,
 		ses.GetUserName(),
-		txnCtx,
+		proc.Ctx,
 		ses.GetStorage(),
 		proc,
 		stmt,
 		ses.GetIsInternal(),
 		deepcopy.Copy(ses.getCNLabels()).(map[string]string),
 		getStatementStartAt(requestCtx),
+		isPrepare,
 	)
 	defer func() {
 		if err != nil && retCompile != nil {
@@ -580,10 +584,130 @@ func buildCompile(
 		}
 		return newPlan, err
 	})
-	err = retCompile.Compile(txnCtx, plan, fill)
+	err = retCompile.Compile(proc.Ctx, plan, fill)
 	if err != nil {
 		return nil, err
 	}
 	retCompile.SetOriginSQL(originSQL)
+
+	if retCompile.NeedInitTempEngine(ses.IfInitedTempEngine()) {
+		// 0. init memory-non-dist storage
+		var tnStore *metadata.TNService
+		rt := runtime.ProcessLevelRuntime()
+		tnStore, err = ses.SetTempTableStorage(rt.Clock())
+		if err != nil {
+			return nil, err
+		}
+
+		// temporary storage is passed through Ctx
+		requestCtx = context.WithValue(requestCtx, defines.TemporaryTN{}, ses.GetTempTableStorage())
+
+		// 1. init memory-non-dist engine
+		tempEngine := memoryengine.New(
+			requestCtx,
+			memoryengine.NewDefaultShardPolicy(
+				mpool.MustNewZeroNoFixed(),
+			),
+			memoryengine.RandomIDGenerator,
+			clusterservice.NewMOCluster(
+				nil,
+				0,
+				clusterservice.WithDisableRefresh(),
+				clusterservice.WithServices(nil, []metadata.TNService{
+					*tnStore,
+				})),
+		)
+
+		// 2. bind the temporary engine to the session and txnHandler
+		_ = ses.SetTempEngine(requestCtx, tempEngine)
+		retCompile.SetTempEngine(requestCtx, tempEngine)
+		ses.GetTxnHandler().SetTempEngine(tempEngine)
+		ses.GetTxnHandler().AttachTempStorageToTxnCtx()
+
+		// 3. init temp-db to store temporary relations
+		err = tempEngine.Create(requestCtx, defines.TEMPORARY_DBNAME, ses.GetTxnHandler().txnOperator)
+		if err != nil {
+			return nil, err
+		}
+
+		ses.EnableInitTempEngine()
+	}
+	return
+}
+
+func createPlan(
+	requestCtx context.Context,
+	ses FeSession,
+	proc *process.Process,
+	stmt tree.Statement,
+	plan *plan2.Plan,
+) (retPlan *plan2.Plan, err error) {
+
+	if ses.IfInitedTempEngine() {
+		requestCtx = context.WithValue(requestCtx, defines.TemporaryTN{}, ses.GetTempTableStorage())
+		ses.SetRequestContext(requestCtx)
+		proc.Ctx = context.WithValue(proc.Ctx, defines.TemporaryTN{}, ses.GetTempTableStorage())
+		ses.GetTxnHandler().AttachTempStorageToTxnCtx()
+	}
+
+	txnHandler := ses.GetTxnHandler()
+	var txnCtx context.Context
+	txnCtx, proc.TxnOperator, err = txnHandler.GetTxn()
+	if err != nil {
+		return
+	}
+
+	txnCtx = statistic.EnsureStatsInfoCanBeFound(txnCtx, requestCtx)
+
+	// Increase the statement ID and update snapshot TS before build plan, because the
+	// snapshot TS is used when build plan.
+	// NB: In internal executor, we should also do the same action, which is increasing
+	// statement ID and updating snapshot TS.
+	// See `func (exec *txnExecutor) Exec(sql string)` for details.
+	txnOp := proc.TxnOperator
+	ses.SetTxnId(txnOp.Txn().ID)
+	//non derived statement
+	if txnOp != nil && !ses.IsDerivedStmt() {
+		//startStatement has been called
+		ok, _ := ses.GetTxnHandler().calledStartStmt()
+		if !ok {
+			txnOp.GetWorkspace().StartStatement()
+			ses.GetTxnHandler().enableStartStmt(txnOp.Txn().ID)
+		}
+
+		//increase statement id
+		err = txnOp.GetWorkspace().IncrStatementID(requestCtx, false)
+		if err != nil {
+			return
+		}
+		ses.GetTxnHandler().enableIncrStmt(txnOp.Txn().ID)
+	}
+
+	cacheHit := plan != nil
+	retPlan = plan
+	if !cacheHit {
+		retPlan, err = buildPlan(requestCtx, ses, ses.GetTxnCompileCtx(), stmt)
+	} else if ses != nil && ses.GetTenantInfo() != nil && !ses.IsBackgroundSession() {
+		var accId uint32
+		accId, err = defines.GetAccountId(requestCtx)
+		if err != nil {
+			return
+		}
+		ses.SetAccountId(accId)
+		err = authenticateCanExecuteStatementAndPlan(requestCtx, ses.(*Session), stmt, plan)
+	}
+	if err != nil {
+		return
+	}
+	if !ses.IsBackgroundSession() {
+		ses.SetPlan(retPlan)
+		if ids := isResultQuery(retPlan); ids != nil {
+			if err = checkPrivilege(ids, requestCtx, ses.(*Session)); err != nil {
+				return
+			}
+		}
+	}
+	proc.Ctx = txnCtx
+	proc.FileService = getGlobalPu().FileService
 	return
 }

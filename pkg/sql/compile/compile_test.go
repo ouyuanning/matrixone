@@ -17,10 +17,11 @@ package compile
 import (
 	"context"
 	"fmt"
-	"github.com/matrixorigin/matrixone/pkg/txn/client"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/matrixorigin/matrixone/pkg/txn/client"
 
 	"github.com/matrixorigin/matrixone/pkg/catalog"
 	"github.com/matrixorigin/matrixone/pkg/defines"
@@ -148,7 +149,7 @@ func TestCompile(t *testing.T) {
 		tc.proc.TxnClient = txnClient
 		tc.proc.TxnOperator = txnOperator
 		tc.proc.Ctx = ctx
-		c := NewCompile("test", "test", tc.sql, "", "", ctx, tc.e, tc.proc, tc.stmt, false, nil, time.Now())
+		c := NewCompile("test", "test", tc.sql, "", "", ctx, tc.e, tc.proc, tc.stmt, false, nil, time.Now(), false)
 		err := c.Compile(ctx, tc.pn, testPrint)
 		require.NoError(t, err)
 		c.getAffectedRows()
@@ -169,7 +170,7 @@ func TestCompileWithFaults(t *testing.T) {
 	fault.AddFaultPoint(ctx, "panic_in_batch_append", ":::", "panic", 0, "")
 	tc := newTestCase("select * from R join S on R.uid = S.uid", t)
 	tc.proc.Ctx = ctx
-	c := NewCompile("test", "test", tc.sql, "", "", ctx, tc.e, tc.proc, nil, false, nil, time.Now())
+	c := NewCompile("test", "test", tc.sql, "", "", ctx, tc.e, tc.proc, nil, false, nil, time.Now(), false)
 	err := c.Compile(ctx, tc.pn, testPrint)
 	require.NoError(t, err)
 	c.getAffectedRows()

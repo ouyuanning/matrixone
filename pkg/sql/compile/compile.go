@@ -69,6 +69,7 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/sql/parsers/tree"
 	plan2 "github.com/matrixorigin/matrixone/pkg/sql/plan"
 	"github.com/matrixorigin/matrixone/pkg/sql/plan/function"
+	"github.com/matrixorigin/matrixone/pkg/sql/plan/rule"
 	"github.com/matrixorigin/matrixone/pkg/sql/util"
 	mokafka "github.com/matrixorigin/matrixone/pkg/stream/adapter/kafka"
 	"github.com/matrixorigin/matrixone/pkg/txn/client"
@@ -108,6 +109,7 @@ func NewCompile(
 	isInternal bool,
 	cnLabel map[string]string,
 	startAt time.Time,
+	isParepare bool,
 ) *Compile {
 	c := reuse.Alloc[Compile](nil)
 	c.e = e
@@ -124,6 +126,7 @@ func NewCompile(
 	c.cnLabel = cnLabel
 	c.startAt = startAt
 	c.disableRetry = false
+	c.isPrepare = isParepare
 	if c.proc.TxnOperator != nil {
 		c.proc.TxnOperator.GetWorkspace().UpdateSnapshotWriteOffset()
 	}
@@ -174,6 +177,8 @@ func (c *Compile) reset() {
 	c.needLockMeta = false
 	c.isInternal = false
 	c.lastAllocID = 0
+	c.isPrepare = false
+	c.cantSavePrepare = false
 
 	for k := range c.metaTables {
 		delete(c.metaTables, k)
@@ -187,6 +192,10 @@ func (c *Compile) reset() {
 	for k := range c.cnLabel {
 		delete(c.cnLabel, k)
 	}
+}
+
+func (c *Compile) CantSavePrepare() bool {
+	return c.cantSavePrepare
 }
 
 // helper function to judge if init temporary engine is needed
@@ -252,6 +261,10 @@ func (c *Compile) Compile(ctx context.Context, pn *plan.Plan, fill func(*batch.B
 				time.Since(start),
 				err)
 		}()
+
+		if pn == nil || pn.Plan == nil {
+			fmt.Print("dd")
+		}
 
 		if qry, ok := pn.Plan.(*plan.Plan_Query); ok {
 			if qry.Query.StmtType == plan.Query_SELECT {
@@ -533,7 +546,7 @@ func (c *Compile) prepareRetry(defChanged bool) (*Compile, error) {
 	// improved to refresh expression in the future.
 
 	var e error
-	runC := NewCompile(c.addr, c.db, c.sql, c.tenant, c.uid, c.proc.Ctx, c.e, c.proc, c.stmt, c.isInternal, c.cnLabel, c.startAt)
+	runC := NewCompile(c.addr, c.db, c.sql, c.tenant, c.uid, c.proc.Ctx, c.e, c.proc, c.stmt, c.isInternal, c.cnLabel, c.startAt, false)
 	defer func() {
 		if e != nil {
 			runC.Release()
@@ -2183,11 +2196,13 @@ func (c *Compile) compileTableScanDataSource(s *Scope) error {
 	}
 
 	var filterExpr *plan.Expr
-	if len(n.FilterList) > 0 {
-		filterExpr = colexec.RewriteFilterExprList(n.FilterList)
-		filterExpr, err = plan2.ConstantFold(batch.EmptyForConstFoldBatch, plan2.DeepCopyExpr(filterExpr), c.proc, true)
-		if err != nil {
-			return err
+	if !c.isPrepare {
+		if len(n.FilterList) > 0 {
+			filterExpr = colexec.RewriteFilterExprList(n.FilterList)
+			filterExpr, err = plan2.ConstantFold(batch.EmptyForConstFoldBatch, plan2.DeepCopyExpr(filterExpr), c.proc, true)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -2211,7 +2226,8 @@ func (c *Compile) compileRestrict(n *plan.Node, ss []*Scope) []*Scope {
 	}
 	currentFirstFlag := c.anal.isFirst
 	// for dynamic parameter, substitute param ref and const fold cast expression here to improve performance
-	newFilters, err := plan2.ConstandFoldList(n.FilterList, c.proc, true)
+	// should not fold ? & @var in compile.
+	newFilters, err := plan2.ConstantFoldList(n.FilterList, c.proc, false)
 	if err != nil {
 		newFilters = n.FilterList
 	}
@@ -2640,12 +2656,26 @@ func (c *Compile) compilePartition(n *plan.Node, ss []*Scope) []*Scope {
 	return []*Scope{rs}
 }
 
+func (c *Compile) evalExprOnce(e *plan.Expr) *vector.Vector {
+	if c.isPrepare {
+		if !rule.IsConstant(e, false) {
+			c.cantSavePrepare = true
+			return nil
+		}
+	}
+	vec, err := colexec.EvalExpressionOnce(c.proc, e, []*batch.Batch{constBat})
+	if err != nil {
+		panic(err)
+	}
+	return vec
+}
+
 func (c *Compile) compileSort(n *plan.Node, ss []*Scope) []*Scope {
 	switch {
 	case n.Limit != nil && n.Offset == nil && len(n.OrderBy) > 0: // top
-		vec, err := colexec.EvalExpressionOnce(c.proc, n.Limit, []*batch.Batch{constBat})
-		if err != nil {
-			panic(err)
+		vec := c.evalExprOnce(n.Limit)
+		if vec == nil {
+			return ss
 		}
 		defer vec.Free(c.proc.Mp())
 		return c.compileTop(n, vector.MustFixedCol[int64](vec)[0], ss)
@@ -2655,16 +2685,16 @@ func (c *Compile) compileSort(n *plan.Node, ss []*Scope) []*Scope {
 
 	case n.Limit != nil && n.Offset != nil && len(n.OrderBy) > 0:
 		// get limit
-		vec1, err := colexec.EvalExpressionOnce(c.proc, n.Limit, []*batch.Batch{constBat})
-		if err != nil {
-			panic(err)
+		vec1 := c.evalExprOnce(n.Limit)
+		if vec1 == nil {
+			return ss
 		}
 		defer vec1.Free(c.proc.Mp())
 
 		// get offset
-		vec2, err := colexec.EvalExpressionOnce(c.proc, n.Offset, []*batch.Batch{constBat})
-		if err != nil {
-			panic(err)
+		vec2 := c.evalExprOnce(n.Offset)
+		if vec2 == nil {
+			return ss
 		}
 		defer vec2.Free(c.proc.Mp())
 
@@ -2797,18 +2827,33 @@ func (c *Compile) compileOffset(n *plan.Node, ss []*Scope) []*Scope {
 		}
 	}
 
+	var offset int64
+	vec := c.evalExprOnce(n.Offset)
+	if vec != nil {
+		defer vec.Free(c.proc.Mp())
+		offset = vector.MustFixedCol[int64](vec)[0]
+	}
+
 	rs := c.newMergeScope(ss)
 	rs.Instructions[0].Arg.Release()
 	rs.Instructions[0] = vm.Instruction{
 		Op:  vm.MergeOffset,
 		Idx: c.anal.curr,
-		Arg: constructMergeOffset(n, c.proc),
+		Arg: constructMergeOffset(offset),
 	}
 	return []*Scope{rs}
 }
 
 func (c *Compile) compileLimit(n *plan.Node, ss []*Scope) []*Scope {
 	currentFirstFlag := c.anal.isFirst
+
+	var limit int64
+	vec := c.evalExprOnce(n.Limit)
+	if vec != nil {
+		defer vec.Free(c.proc.Mp())
+		limit = vector.MustFixedCol[int64](vec)[0]
+	}
+
 	for i := range ss {
 		c.anal.isFirst = currentFirstFlag
 		if containBrokenNode(ss[i]) {
@@ -2818,7 +2863,7 @@ func (c *Compile) compileLimit(n *plan.Node, ss []*Scope) []*Scope {
 			Op:      vm.Limit,
 			Idx:     c.anal.curr,
 			IsFirst: c.anal.isFirst,
-			Arg:     constructLimit(n, c.proc),
+			Arg:     constructLimit(limit),
 		})
 	}
 	c.anal.isFirst = false
@@ -2828,7 +2873,7 @@ func (c *Compile) compileLimit(n *plan.Node, ss []*Scope) []*Scope {
 	rs.Instructions[0] = vm.Instruction{
 		Op:  vm.MergeLimit,
 		Idx: c.anal.curr,
-		Arg: constructMergeLimit(n, c.proc),
+		Arg: constructMergeLimit(limit),
 	}
 	return []*Scope{rs}
 }
@@ -3774,6 +3819,9 @@ func (c *Compile) generateNodes(n *plan.Node) (engine.Nodes, []any, []types.T, e
 	}
 
 	if c.determinExpandRanges(n, rel) {
+		if c.isPrepare {
+			return nil, nil, nil, moerr.NewCantCompileForPrepare(c.ctx)
+		}
 		ranges, err = c.expandRanges(n, rel, n.BlockFilterList)
 		if err != nil {
 			return nil, nil, nil, err

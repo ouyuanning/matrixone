@@ -75,12 +75,7 @@ func execInFrontend(requestCtx context.Context,
 			return
 		}
 	case *tree.PrepareStmt:
-		var txnCtx context.Context
-		txnCtx, ses.proc.TxnOperator, err = ses.GetTxnHandler().GetTxn()
-		if err != nil {
-			return
-		}
-		execCtx.prepareStmt, err = handlePrepareStmt(requestCtx, txnCtx, ses, st, execCtx.sqlOfStmt)
+		execCtx.prepareStmt, err = handlePrepareStmt(requestCtx, ses, st, execCtx.sqlOfStmt)
 		if err != nil {
 			return
 		}
@@ -90,12 +85,7 @@ func execInFrontend(requestCtx context.Context,
 			return
 		}
 	case *tree.PrepareString:
-		var txnCtx context.Context
-		txnCtx, ses.proc.TxnOperator, err = ses.GetTxnHandler().GetTxn()
-		if err != nil {
-			return
-		}
-		execCtx.prepareStmt, err = handlePrepareString(requestCtx, txnCtx, ses, st)
+		execCtx.prepareStmt, err = handlePrepareString(requestCtx, ses, st)
 		if err != nil {
 			return
 		}

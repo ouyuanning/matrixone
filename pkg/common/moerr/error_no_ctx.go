@@ -362,3 +362,7 @@ func NewTxnCannotRetryNoCtx() *Error {
 func NewRPCTimeoutNoCtx() *Error {
 	return NewRPCTimeout(Context())
 }
+
+func NewCantCompileForPrepareNoCtx() *Error {
+	return newError(Context(), ErrCantCompileForPrepare)
+}

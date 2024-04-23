@@ -1935,12 +1935,7 @@ func (p *prepareStmtMigration) Migrate(ses *Session) error {
 	if err != nil {
 		return err
 	}
-	var txnCtx context.Context
-	txnCtx, ses.proc.TxnOperator, err = ses.GetTxnHandler().GetTxn()
-	if err != nil {
-		return err
-	}
-	if _, err = doPrepareStmt(ses.requestCtx, txnCtx, ses, stmts[0].(*tree.PrepareStmt), p.sql, p.paramTypes); err != nil {
+	if _, err = doPrepareStmt(ses.requestCtx, ses, stmts[0].(*tree.PrepareStmt), p.sql, p.paramTypes); err != nil {
 		return err
 	}
 	return nil

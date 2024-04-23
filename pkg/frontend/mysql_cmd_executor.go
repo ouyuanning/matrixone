@@ -1181,39 +1181,28 @@ func handleExplainStmt(_ context.Context, ses FeSession, stmt *tree.ExplainStmt)
 	return doExplainStmt(ses.(*Session), stmt)
 }
 
-func doPrepareStmt(ctx context.Context, txnCtx context.Context, ses *Session, st *tree.PrepareStmt, sql string, paramTypes []byte) (*PrepareStmt, error) {
-	preparePlan, err := buildPlan(ctx, ses, ses.GetTxnCompileCtx(), st)
+func doPrepareStmt(ctx context.Context, ses *Session, st *tree.PrepareStmt, sql string, paramTypes []byte) (*PrepareStmt, error) {
+	idx := strings.Index(strings.ToLower(sql[:(len(st.Name)+20)]), "from") + 5
+	originSql := strings.TrimLeft(sql[idx:], " ")
+	fmt.Print(originSql)
+	prepareStmt, err := createPrepareStmt(ctx, ses, originSql, st, st.Stmt)
 	if err != nil {
 		return nil, err
-	}
-	comp, err := buildCompile(ctx, txnCtx, ses, ses.proc, sql, st.Stmt, preparePlan.GetDcl().GetPrepare().Plan, ses.GetOutputCallback())
-	if err != nil {
-		return nil, err
-	}
-
-	prepareStmt := &PrepareStmt{
-		Name:                preparePlan.GetDcl().GetPrepare().GetName(),
-		Sql:                 sql,
-		PreparePlan:         preparePlan,
-		PrepareStmt:         st.Stmt,
-		compile:             comp,
-		getFromSendLongData: make(map[int]struct{}),
 	}
 	if len(paramTypes) > 0 {
 		prepareStmt.ParamTypes = paramTypes
 	}
-	prepareStmt.InsertBat = ses.GetTxnCompileCtx().GetProcess().GetPrepareBatch()
-	err = ses.SetPrepareStmt(preparePlan.GetDcl().GetPrepare().GetName(), prepareStmt)
 
+	err = ses.SetPrepareStmt(prepareStmt.Name, prepareStmt)
 	return prepareStmt, err
 }
 
 // handlePrepareStmt
-func handlePrepareStmt(ctx context.Context, txnCtx context.Context, ses FeSession, st *tree.PrepareStmt, sql string) (*PrepareStmt, error) {
-	return doPrepareStmt(ctx, txnCtx, ses.(*Session), st, sql, nil)
+func handlePrepareStmt(ctx context.Context, ses FeSession, st *tree.PrepareStmt, sql string) (*PrepareStmt, error) {
+	return doPrepareStmt(ctx, ses.(*Session), st, sql, nil)
 }
 
-func doPrepareString(ctx context.Context, txnCtx context.Context, ses *Session, st *tree.PrepareString) (*PrepareStmt, error) {
+func doPrepareString(ctx context.Context, ses *Session, st *tree.PrepareString) (*PrepareStmt, error) {
 	v, err := ses.GetGlobalVar("lower_case_table_names")
 	if err != nil {
 		return nil, err
@@ -1228,30 +1217,57 @@ func doPrepareString(ctx context.Context, txnCtx context.Context, ses *Session, 
 	if err != nil {
 		return nil, err
 	}
+	prepareStmt, err := createPrepareStmt(ctx, ses, st.Sql, st, stmts[0])
+	if err != nil {
+		return nil, err
+	}
 
-	preparePlan, err := buildPlan(ses.GetRequestContext(), ses, ses.GetTxnCompileCtx(), st)
-	if err != nil {
-		return nil, err
-	}
-	comp, err := buildCompile(ctx, txnCtx, ses, ses.proc, st.Sql, stmts[0], preparePlan.GetDcl().GetPrepare().Plan, ses.GetOutputCallback())
-	if err != nil {
-		return nil, err
-	}
-	prepareStmt := &PrepareStmt{
-		Name:        preparePlan.GetDcl().GetPrepare().GetName(),
-		Sql:         st.Sql,
-		compile:     comp,
-		PreparePlan: preparePlan,
-		PrepareStmt: stmts[0],
-	}
-	prepareStmt.InsertBat = ses.GetTxnCompileCtx().GetProcess().GetPrepareBatch()
-	err = ses.SetPrepareStmt(preparePlan.GetDcl().GetPrepare().GetName(), prepareStmt)
+	err = ses.SetPrepareStmt(prepareStmt.Name, prepareStmt)
 	return prepareStmt, err
 }
 
 // handlePrepareString
-func handlePrepareString(ctx context.Context, txnCtx context.Context, ses FeSession, st *tree.PrepareString) (*PrepareStmt, error) {
-	return doPrepareString(ctx, txnCtx, ses.(*Session), st)
+func handlePrepareString(ctx context.Context, ses FeSession, st *tree.PrepareString) (*PrepareStmt, error) {
+	return doPrepareString(ctx, ses.(*Session), st)
+}
+
+func createPrepareStmt(
+	ctx context.Context,
+	ses *Session,
+	originSQL string,
+	stmt tree.Statement,
+	saveStmt tree.Statement) (*PrepareStmt, error) {
+
+	preparePlan, err := createPlan(ctx, ses, ses.proc, stmt, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var comp *compile.Compile
+	if _, ok := preparePlan.GetDcl().GetPrepare().Plan.Plan.(*plan.Plan_Query); ok {
+		//only DQL & DML will pre compile
+		comp, err = createCompile(ctx, ses, ses.proc, originSQL, stmt, preparePlan.GetDcl().GetPrepare().Plan, ses.GetOutputCallback(), true)
+		if err != nil {
+			if !moerr.IsMoErrCode(err, moerr.ErrCantCompileForPrepare) {
+				return nil, err
+			}
+		}
+		if comp != nil && comp.CantSavePrepare() {
+			comp.Release()
+			comp = nil
+		}
+	}
+
+	prepareStmt := &PrepareStmt{
+		Name:                preparePlan.GetDcl().GetPrepare().GetName(),
+		Sql:                 originSQL,
+		compile:             comp,
+		PreparePlan:         preparePlan,
+		PrepareStmt:         saveStmt,
+		getFromSendLongData: make(map[int]struct{}),
+	}
+	prepareStmt.InsertBat = ses.GetTxnCompileCtx().GetProcess().GetPrepareBatch()
+	return prepareStmt, nil
 }
 
 func doDeallocate(ctx context.Context, ses *Session, st *tree.Deallocate) error {
