@@ -144,6 +144,27 @@ func (c Compile) TypeName() string {
 	return "compile.Compile"
 }
 
+func (c *Compile) ResetForRun(
+	startAt time.Time,
+) {
+	c.startAt = startAt
+}
+
+func (c *Compile) ResetForPrepare() {
+	c.affectRows.Store(0)
+
+	for _, info := range c.anal.analInfos {
+		info.Reset()
+	}
+
+	c.counterSet.Reset()
+
+	for _, f := range c.fuzzys {
+		f.condition = ""
+		f.cnt = 0
+	}
+}
+
 func (c *Compile) reset() {
 	if c.anal != nil {
 		c.anal.release()
@@ -196,6 +217,10 @@ func (c *Compile) reset() {
 
 func (c *Compile) CantSavePrepare() bool {
 	return c.cantSavePrepare
+}
+
+func (c *Compile) IsPrepare() bool {
+	return c.isPrepare
 }
 
 // helper function to judge if init temporary engine is needed
@@ -261,10 +286,6 @@ func (c *Compile) Compile(ctx context.Context, pn *plan.Plan, fill func(*batch.B
 				time.Since(start),
 				err)
 		}()
-
-		if pn == nil || pn.Plan == nil {
-			fmt.Print("dd")
-		}
 
 		if qry, ok := pn.Plan.(*plan.Plan_Query); ok {
 			if qry.Query.StmtType == plan.Query_SELECT {

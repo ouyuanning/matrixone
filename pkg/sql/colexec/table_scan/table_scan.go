@@ -36,6 +36,9 @@ func (arg *Argument) String(buf *bytes.Buffer) {
 
 func (arg *Argument) Prepare(proc *process.Process) (err error) {
 	arg.OrderBy = arg.Reader.GetOrderBy()
+	if arg.msgReceiver != nil {
+		arg.msgReceiver.Free()
+	}
 	if arg.TopValueMsgTag > 0 {
 		arg.msgReceiver = proc.NewMessageReceiver([]int32{arg.TopValueMsgTag}, arg.GetAddress())
 	}

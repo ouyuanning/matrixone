@@ -29,6 +29,7 @@ func (arg *Argument) String(buf *bytes.Buffer) {
 }
 
 func (arg *Argument) Prepare(proc *process.Process) (err error) {
+	arg.idx = 0
 	return nil
 }
 

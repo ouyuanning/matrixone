@@ -135,7 +135,7 @@ func (s *Scope) Run(c *Compile) (err error) {
 	s.Proc.Ctx = context.WithValue(s.Proc.Ctx, defines.EngineKey{}, c.e)
 	// DataSource == nil specify the empty scan
 	if s.DataSource == nil {
-		p = pipeline.New(0, nil, s.Instructions, s.Reg)
+		p = pipeline.New(0, nil, s.Instructions, s.Reg, c.isPrepare)
 		if _, err = p.ConstRun(nil, s.Proc); err != nil {
 			return err
 		}
@@ -144,7 +144,7 @@ func (s *Scope) Run(c *Compile) (err error) {
 		if s.DataSource.TableDef != nil {
 			id = s.DataSource.TableDef.TblId
 		}
-		p = pipeline.New(id, s.DataSource.Attributes, s.Instructions, s.Reg)
+		p = pipeline.New(id, s.DataSource.Attributes, s.Instructions, s.Reg, c.isPrepare)
 		if s.DataSource.isConst {
 			_, err = p.ConstRun(s.DataSource.Bat, s.Proc)
 		} else {
@@ -244,7 +244,7 @@ func (s *Scope) MergeRun(c *Compile) error {
 		errReceiveChan = make(chan error, len(s.RemoteReceivRegInfos))
 		s.notifyAndReceiveFromRemote(errReceiveChan)
 	}
-	p := pipeline.NewMerge(s.Instructions, s.Reg)
+	p := pipeline.NewMerge(s.Instructions, s.Reg, c.isPrepare)
 	if _, err := p.MergeRun(s.Proc); err != nil {
 		select {
 		case <-s.Proc.Ctx.Done():
@@ -299,7 +299,7 @@ func (s *Scope) RemoteRun(c *Compile) error {
 			zap.String("local-address", c.addr),
 			zap.String("remote-address", s.NodeInfo.Addr))
 
-	p := pipeline.New(0, nil, s.Instructions, s.Reg)
+	p := pipeline.New(0, nil, s.Instructions, s.Reg, c.isPrepare)
 	err := s.remoteRun(c)
 	select {
 	case <-s.Proc.Ctx.Done():

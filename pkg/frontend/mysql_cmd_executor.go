@@ -2592,7 +2592,11 @@ func executeStmt(requestCtx context.Context,
 
 	defer func() {
 		if c, ok := ret.(*compile.Compile); ok {
-			c.Release()
+			if c.IsPrepare() {
+				c.ResetForPrepare()
+			} else {
+				c.Release()
+			}
 		}
 	}()
 

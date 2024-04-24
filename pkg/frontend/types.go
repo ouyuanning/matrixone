@@ -242,6 +242,9 @@ func (prepareStmt *PrepareStmt) Close() {
 	if prepareStmt.PrepareStmt != nil {
 		prepareStmt.PrepareStmt.Free()
 	}
+	if prepareStmt.compile != nil {
+		prepareStmt.compile.Release()
+	}
 }
 
 var _ buf.Allocator = &SessionAllocator{}
