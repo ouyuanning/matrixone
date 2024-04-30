@@ -15,7 +15,6 @@
 package plan
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"io"
@@ -150,43 +149,38 @@ func getAccountCol(filepath string) string {
 
 func getExternalStats(node *plan.Node, builder *QueryBuilder) *Stats {
 	externScan := node.ExternScan
+	rowSize := GetRowSizeFromTableDef(node.GetTableDef(), true) * 0.8
 	if externScan != nil && externScan.Type == tree.INLINE {
 		totolSize := len(externScan.Data)
-		lineSize := float64(0.0)
-		if externScan.Format == tree.CSV {
-			lineSize = float64(strings.Index(externScan.Data, "\n"))
+		cost := float64(totolSize) / rowSize
+		return &plan.Stats{
+			Outcnt:      cost,
+			Cost:        cost,
+			Rowsize:     rowSize,
+			Selectivity: 1,
+			TableCnt:    cost,
+			BlockNum:    int32(cost / float64(options.DefaultBlockMaxRows)),
 		}
+	}
 
-		if externScan.Format == tree.JSONLINE {
-			lineSize = GetRowSizeFromTableDef(node.GetTableDef(), true) * 0.8
-		}
-
-		if lineSize > 0 {
-			cost := float64(totolSize) / lineSize
-			return &plan.Stats{
-				Outcnt:      cost,
-				Cost:        cost,
-				Rowsize:     lineSize,
-				Selectivity: 1,
-				TableCnt:    cost,
-				BlockNum:    int32(cost / float64(options.DefaultBlockMaxRows)),
-			}
-		}
+	getDefaultStats := func() *Stats {
+		stats := DefaultHugeStats()
+		stats.Rowsize = rowSize
+		return stats
 	}
 
 	param := &tree.ExternParam{}
 	err := json.Unmarshal([]byte(node.TableDef.Createsql), param)
 	if err != nil || param.Local || param.ScanType == tree.S3 {
-		return DefaultHugeStats()
 	}
 
 	if param.ScanType == tree.S3 {
 		if err = InitS3Param(param); err != nil {
-			return DefaultHugeStats()
+			return getDefaultStats()
 		}
 	} else {
 		if err = InitInfileParam(param); err != nil {
-			return DefaultHugeStats()
+			return getDefaultStats()
 		}
 	}
 
@@ -196,15 +190,15 @@ func getExternalStats(node *plan.Node, builder *QueryBuilder) *Stats {
 	fileList, fileSize, err := ReadDir(param)
 	spanReadDir.End()
 	if err != nil {
-		return DefaultHugeStats()
+		return getDefaultStats()
 	}
 	fileList, fileSize, err = filterFileList(param.Ctx, node, builder.compCtx.GetProcess(), fileList, fileSize)
 	if err != nil {
-		return DefaultHugeStats()
+		return getDefaultStats()
 	}
 	if param.LoadFile && len(fileList) == 0 {
 		// all files filtered, return a default small stats
-		return DefaultStats()
+		return getDefaultStats()
 	}
 	var cost float64
 	for i := range fileSize {
@@ -214,7 +208,7 @@ func getExternalStats(node *plan.Node, builder *QueryBuilder) *Stats {
 	//read one line
 	fs, readPath, err := GetForETLWithType(param, param.Filepath)
 	if err != nil {
-		return DefaultHugeStats()
+		return getDefaultStats()
 	}
 	var r io.ReadCloser
 	vec := fileservice.IOVector{
@@ -228,17 +222,14 @@ func getExternalStats(node *plan.Node, builder *QueryBuilder) *Stats {
 		},
 	}
 	if err = fs.Read(param.Ctx, &vec); err != nil {
-		return DefaultHugeStats()
+		return getDefaultStats()
 	}
-	r2 := bufio.NewReader(r)
-	line, _ := r2.ReadString('\n')
-	size := len(line)
-	cost = cost / float64(size)
+	cost = cost / float64(rowSize)
 
 	return &plan.Stats{
 		Outcnt:      cost,
 		Cost:        cost,
-		Rowsize:     float64(size),
+		Rowsize:     rowSize,
 		Selectivity: 1,
 		TableCnt:    cost,
 		BlockNum:    int32(cost / float64(options.DefaultBlockMaxRows)),

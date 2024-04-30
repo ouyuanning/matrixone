@@ -1988,6 +1988,7 @@ func (c *Compile) compileExternScan(ctx context.Context, n *plan.Node) ([]*Scope
 	for i := range ss {
 		ss[i] = c.constructScopeForExternal(c.cnList[i].Addr, param.Parallel)
 		ss[i].IsLoad = true
+		// ss[i].NodeInfo.Mcpu = parallelSize
 		count := ID2Addr[i]
 		fileOffsetTmp := make([]*pipeline.FileOffset, len(fileList))
 		for j := range fileOffsetTmp {
@@ -2031,6 +2032,7 @@ func (c *Compile) compileExternValueScan(n *plan.Node, param *tree.ExternParam) 
 	ss := make([]*Scope, parallelSize)
 	for i := 0; i < parallelSize; i++ {
 		ss[i] = c.constructLoadMergeScope()
+		ss[i].NodeInfo.Mcpu = parallelSize
 	}
 	s := c.constructScopeForExternal(c.addr, false)
 	s.appendInstruction(vm.Instruction{
@@ -2053,10 +2055,11 @@ func (c *Compile) compileExternValueScan(n *plan.Node, param *tree.ExternParam) 
 // construct one thread to read the file data, then dispatch to mcpu thread to get the filedata for insert
 func (c *Compile) compileExternScanParallel(n *plan.Node, param *tree.ExternParam, fileList []string, fileSize []int64) ([]*Scope, error) {
 	param.Parallel = false
-	mcpu := c.cnList[0].Mcpu
-	ss := make([]*Scope, mcpu)
-	for i := 0; i < mcpu; i++ {
+	parallelSize := c.getParallelSizeForExternalScan(n, c.cnList[0].Mcpu)
+	ss := make([]*Scope, parallelSize)
+	for i := 0; i < parallelSize; i++ {
 		ss[i] = c.constructLoadMergeScope()
+		ss[i].NodeInfo.Mcpu = parallelSize
 	}
 	fileOffsetTmp := make([]*pipeline.FileOffset, len(fileList))
 	for i := 0; i < len(fileList); i++ {
