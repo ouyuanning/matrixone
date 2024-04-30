@@ -1514,10 +1514,10 @@ func (c *Compile) compilePlanScope(ctx context.Context, step int32, curNodeIdx i
 			} else {
 				dataScope := c.newMergeScope(ss)
 				dataScope.IsEnd = true
-				if c.anal.qry.LoadTag {
-					dataScope.Proc.Reg.MergeReceivers[0].Ch = make(chan *batch.Batch, dataScope.NodeInfo.Mcpu) // reset the channel buffer of sink for load
-				}
 				parallelSize := c.getParallelSizeForExternalScan(n, dataScope.NodeInfo.Mcpu)
+				if c.anal.qry.LoadTag {
+					dataScope.Proc.Reg.MergeReceivers[0].Ch = make(chan *batch.Batch, parallelSize) // reset the channel buffer of sink for load
+				}
 				scopes := make([]*Scope, 0, parallelSize)
 				regs := make([]*process.WaitRegister, 0, parallelSize)
 				for i := 0; i < parallelSize; i++ {
@@ -1989,7 +1989,6 @@ func (c *Compile) compileExternScan(ctx context.Context, n *plan.Node) ([]*Scope
 	for i := range ss {
 		ss[i] = c.constructScopeForExternal(c.cnList[i].Addr, param.Parallel)
 		ss[i].IsLoad = true
-		// ss[i].NodeInfo.Mcpu = parallelSize
 		count := ID2Addr[i]
 		fileOffsetTmp := make([]*pipeline.FileOffset, len(fileList))
 		for j := range fileOffsetTmp {
