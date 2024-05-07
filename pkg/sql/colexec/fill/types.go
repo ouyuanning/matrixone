@@ -119,6 +119,7 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 	if ctr != nil {
 		ctr.cleanBatch(proc.Mp())
 		ctr.cleanExes()
+		arg.ctr = nil
 	}
 }
 

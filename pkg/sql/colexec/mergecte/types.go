@@ -85,6 +85,10 @@ func (arg *Argument) Reset(proc *process.Process, pipelineFailed bool, err error
 
 func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error) {
 	arg.cleanBuf(proc)
+	if ctr := arg.ctr; ctr != nil {
+		ctr.FreeMergeTypeOperator(pipelineFailed)
+		arg.ctr = nil
+	}
 }
 
 func (arg *Argument) cleanBuf(proc *process.Process) {

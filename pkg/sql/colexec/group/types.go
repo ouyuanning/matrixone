@@ -179,6 +179,7 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 		ctr.cleanHashMap()
 		ctr.cleanAggVectors()
 		ctr.cleanGroupVectors()
+		arg.ctr = nil
 	}
 }
 

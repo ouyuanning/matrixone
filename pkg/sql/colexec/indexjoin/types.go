@@ -90,6 +90,7 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 	ctr := arg.ctr
 	if ctr != nil {
 		ctr.FreeAllReg()
+		arg.ctr = nil
 	}
 }
 

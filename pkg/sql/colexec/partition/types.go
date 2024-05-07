@@ -116,6 +116,7 @@ func (arg *Argument) Reset(proc *process.Process, pipelineFailed bool, err error
 
 func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error) {
 	if ctr := arg.ctr; ctr != nil {
+		ctr.FreeMergeTypeOperator(pipelineFailed)
 		mp := proc.Mp()
 
 		for i := range ctr.batchList {
@@ -144,5 +145,7 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 			ctr.buf.Clean(proc.Mp())
 			ctr.buf = nil
 		}
+
+		arg.ctr = nil
 	}
 }

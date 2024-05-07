@@ -100,6 +100,7 @@ func (arg *Argument) Reset(proc *process.Process, pipelineFailed bool, err error
 		ctr.cleanBuf(proc)
 		ctr.state = build
 	}
+	arg.ctr = nil
 }
 
 func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error) {
@@ -110,6 +111,7 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 			ctr.hashTable = nil
 		}
 		ctr.cleanBuf(proc)
+		arg.ctr = nil
 	}
 }
 

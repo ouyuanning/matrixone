@@ -102,6 +102,7 @@ func (arg *Argument) Free(proc *process.Process, _ bool, err error) {
 		}
 		ctr.sortExprExecutor = nil
 		ctr.resultOrderList = nil
+		arg.ctr = nil
 	}
 }
 

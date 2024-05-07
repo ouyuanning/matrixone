@@ -86,6 +86,7 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 			}
 		}
 		arg.ctr.projExecutors = nil
+		arg.ctr = nil
 	}
 	arg.cleanBuf(proc)
 	anal := proc.GetAnalyze(arg.GetIdx(), arg.GetParallelIdx(), arg.GetParallelMajor())

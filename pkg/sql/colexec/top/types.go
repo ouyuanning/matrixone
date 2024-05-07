@@ -118,6 +118,8 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 			}
 		}
 		ctr.executorsForOrderColumn = nil
+
+		arg.ctr = nil
 	}
 }
 

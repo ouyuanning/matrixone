@@ -93,7 +93,7 @@ type InsertCtx struct {
 
 func (arg *Argument) Reset(proc *process.Process, pipelineFailed bool, err error) {
 	if arg.ctr != nil {
-		arg.cleanBuf(proc)
+		arg.ctr.cleanBuf(proc)
 	}
 }
 
@@ -113,15 +113,16 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 			}
 			arg.ctr.partitionS3Writers = nil
 		}
+		arg.ctr.cleanBuf(proc)
 
-		arg.cleanBuf(proc)
+		arg.ctr = nil
 	}
 }
 
-func (arg *Argument) cleanBuf(proc *process.Process) {
-	if arg.ctr.buf != nil {
-		arg.ctr.buf.Clean(proc.Mp())
-		arg.ctr.buf = nil
+func (ctr *container) cleanBuf(proc *process.Process) {
+	if ctr.buf != nil {
+		ctr.buf.Clean(proc.Mp())
+		ctr.buf = nil
 	}
 }
 

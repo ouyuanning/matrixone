@@ -161,6 +161,7 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 		ctr.cleanTsVector()
 		ctr.cleanAggVector()
 		ctr.cleanWin()
+		arg.ctr = nil
 	}
 }
 

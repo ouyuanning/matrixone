@@ -104,6 +104,7 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 	if ctr != nil {
 		ctr.cleanBatch(proc)
 		ctr.cleanHashMap()
+		arg.ctr = nil
 	}
 }
 
