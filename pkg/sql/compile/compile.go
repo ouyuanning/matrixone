@@ -408,6 +408,13 @@ func (c *Compile) allocOperatorID() int32 {
 	return c.lastAllocID
 }
 
+func (c *Compile) isUpdateOrDelete() bool {
+	if qry, ok := c.pn.Plan.(*plan.Plan_Query); ok {
+		return qry.Query.StmtType == plan.Query_DELETE || qry.Query.StmtType == plan.Query_UPDATE
+	}
+	return false
+}
+
 // Run is an important function of the compute-layer, it executes a single sql according to its scope
 // Need call Release() after call this function.
 func (c *Compile) Run(_ uint64) (result *util2.RunResult, err error) {
@@ -487,6 +494,9 @@ func (c *Compile) Run(_ uint64) (result *util2.RunResult, err error) {
 	runC = c
 	for {
 		if err = runC.runOnce(); err == nil {
+			if c.isUpdateOrDelete() {
+				fmt.Printf("update or delete, affect rows = %d \n", c.affectRows.Load())
+			}
 			break
 		}
 
