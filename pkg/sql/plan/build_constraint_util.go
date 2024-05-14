@@ -1688,32 +1688,30 @@ func checkLockTableOrRows(isMulti bool, query *Query) (bool, *Expr) {
 	for _, node := range query.Nodes {
 		if node.NodeType == plan.Node_TABLE_SCAN {
 			if lockRows != nil {
-				return false, nil
+				return true, nil //lock table if we get more than one table scan
 			}
-			if node.FilterList != nil {
-				for _, expr := range node.FilterList {
-					if e, ok := expr.Expr.(*plan.Expr_F); ok {
-						if e.F.Func.GetObjName() == "=" {
-							//update t1 set a = 1 where pk = 1; then we allays lock rows pk=1, even pk=1 is not exists
-							//delete from where pk = 1; then we allays lock rows pk=1, even pk=1 is not exists
-							if rule.IsConstant(e.F.Args[0], true) && !rule.IsConstant(e.F.Args[1], true) {
-								lockRows = e.F.Args[0]
-							} else if !rule.IsConstant(e.F.Args[0], true) && rule.IsConstant(e.F.Args[1], true) {
-								lockRows = e.F.Args[1]
-							}
-						} else if e.F.Func.GetObjName() == "in" {
-							//update t1 set a = 1 where pk in (1,2); then we allays lock rows pk in (1,2), even pk=1 is not exists
-							//delete from where pk in (1,2); then we allays lock rows pk in (1,2), even pk in (1,2) is not exists
-							if rule.IsConstant(e.F.Args[0], true) && !rule.IsConstant(e.F.Args[1], true) {
-								lockRows = e.F.Args[0]
-							} else if !rule.IsConstant(e.F.Args[0], true) && rule.IsConstant(e.F.Args[1], true) {
-								lockRows = e.F.Args[1]
-							}
+			for _, expr := range node.FilterList {
+				if e, ok := expr.Expr.(*plan.Expr_F); ok {
+					if e.F.Func.GetObjName() == "=" {
+						//update t1 set a = 1 where pk = 1; then we allays lock rows pk=1, even pk=1 is not exists
+						//delete from where pk = 1; then we allays lock rows pk=1, even pk=1 is not exists
+						if rule.IsConstant(e.F.Args[0], true) && !rule.IsConstant(e.F.Args[1], true) {
+							lockRows = e.F.Args[0]
+						} else if !rule.IsConstant(e.F.Args[0], true) && rule.IsConstant(e.F.Args[1], true) {
+							lockRows = e.F.Args[1]
+						}
+					} else if e.F.Func.GetObjName() == "in" {
+						//update t1 set a = 1 where pk in (1,2); then we allays lock rows pk in (1,2), even pk=1 is not exists
+						//delete from where pk in (1,2); then we allays lock rows pk in (1,2), even pk in (1,2) is not exists
+						if rule.IsConstant(e.F.Args[0], true) && !rule.IsConstant(e.F.Args[1], true) {
+							lockRows = e.F.Args[0]
+						} else if !rule.IsConstant(e.F.Args[0], true) && rule.IsConstant(e.F.Args[1], true) {
+							lockRows = e.F.Args[1]
 						}
 					}
 				}
 			}
 		}
 	}
-	return false, nil
+	return false, lockRows
 }

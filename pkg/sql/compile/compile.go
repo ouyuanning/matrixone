@@ -440,6 +440,10 @@ func (c *Compile) Run(_ uint64) (result *util2.RunResult, err error) {
 
 	var writeOffset uint64
 
+	if strings.Contains(c.sql, "t1") {
+		fmt.Printf("%s \n", DebugShowScopes(c.scope))
+	}
+
 	start := time.Now()
 	v2.TxnStatementExecuteLatencyDurationHistogram.Observe(start.Sub(c.startAt).Seconds())
 
@@ -1664,11 +1668,9 @@ func (c *Compile) compilePlanScope(ctx context.Context, step int32, curNodeIdx i
 		block := false
 		// only pessimistic txn needs to block downstream operators.
 		if c.proc.TxnOperator.Txn().IsPessimistic() {
-			block = n.LockTargets[0].Block
-			if block {
-				ss = []*Scope{c.newMergeScope(ss)}
-			}
+			block = n.LockTargets[0].GetBlock()
 		}
+		ss = []*Scope{c.newMergeScope(ss)}
 		currentFirstFlag := c.anal.isFirst
 		for i := range ss {
 			var lockOpArg *lockop.Argument

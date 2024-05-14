@@ -171,8 +171,9 @@ message LockTarget {
   int32 refresh_ts_idx_in_bat   = 4;
   int32 filter_col_idx_in_bat   = 5;
   bool lock_table               = 6;
-  bool ChangeDef               = 7;
-  lock.LockMode Mode         = 8;
+  bool ChangeDef                = 7;
+  lock.LockMode Mode            = 8;
+  plan.Expr lockRows            = 9;
 }
 
 message LockOp {

@@ -250,6 +250,7 @@ const (
 type CallResult struct {
 	Status ExecStatus
 	Batch  *batch.Batch
+	ErrMsg string
 }
 
 func NewCallResult() CallResult {
