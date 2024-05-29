@@ -47,10 +47,12 @@ type dmlSelectInfo struct {
 	rootId         int32
 	derivedTableId int32
 
-	onDuplicateIdx      []int32
-	onDuplicateExpr     map[string]*Expr
-	onDuplicateNeedAgg  bool // if table have pk & unique key, that will be true.
-	onDuplicateIsIgnore bool
+	onDuplicateIdx                 []int32
+	onDuplicateExpr                map[string]*Expr
+	onDuplicateNeedAgg             bool // if table have pk & unique key, that will be true.
+	onDuplicateIsIgnore            bool
+	onDuplicateUpdatePkCol         bool
+	onDuplicateUpdatePkOrUniqueCol bool
 }
 
 type dmlTableInfo struct {
@@ -721,6 +723,30 @@ func initInsertStmt(builder *QueryBuilder, bindCtx *BindContext, stmt *tree.Inse
 				joinIdx++
 			}
 
+			updatePkCol := false
+			updatePkOrUniqueCol := false
+			if tableDef.Pkey.PkeyColName != catalog.FakePrimaryKeyColName {
+				for _, name := range tableDef.Pkey.Names {
+					if _, ok := updateExprs[name]; ok {
+						updatePkCol = true
+						break
+					}
+				}
+			}
+			updatePkOrUniqueCol = updatePkCol
+			if !updatePkOrUniqueCol {
+				for _, idx := range tableDef.Indexes {
+					if idx.Unique {
+						for _, col := range idx.Parts {
+							if _, ok := updateExprs[col]; ok {
+								updatePkOrUniqueCol = true
+								break
+							}
+						}
+					}
+				}
+			}
+
 			// append join node
 			leftCtx := builder.ctxByNode[info.rootId]
 			err = joinCtx.mergeContexts(builder.GetContext(), leftCtx, rightCtx)
@@ -739,6 +765,8 @@ func initInsertStmt(builder *QueryBuilder, bindCtx *BindContext, stmt *tree.Inse
 			info.onDuplicateExpr = updateExprs
 			info.onDuplicateNeedAgg = len(uniqueCols) > 1
 			info.onDuplicateIsIgnore = isIgnore
+			info.onDuplicateUpdatePkCol = updatePkCol
+			info.onDuplicateUpdatePkOrUniqueCol = updatePkOrUniqueCol
 
 			// append ProjectNode
 			info.rootId = builder.appendNode(&plan.Node{
