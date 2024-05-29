@@ -47,10 +47,96 @@ func (arg *Argument) Call(proc *process.Process) (vm.CallResult, error) {
 		return vm.CancelResult, err
 	}
 
+	if arg.UpdatePkOrUk || arg.IsIgnore {
+		return arg.callBlock(proc)
+	} else {
+		return arg.callNonBlock(proc)
+	}
+}
+
+func (arg *Argument) callNonBlock(proc *process.Process) (vm.CallResult, error) {
 	anal := proc.GetAnalyze(arg.GetIdx(), arg.GetParallelIdx(), arg.GetParallelMajor())
 	anal.Start()
 	defer anal.Stop()
 
+	ctr := arg.ctr
+	result := vm.NewCallResult()
+	msg := ctr.ReceiveFromAllRegs(anal)
+	if msg.Err != nil {
+		result.Status = vm.ExecStop
+		return result, nil
+	}
+
+	if msg.Batch == nil {
+		result.Status = vm.ExecStop
+		return result, nil
+	}
+
+	rowIdIdx := int32(-1)
+	originBatch := msg.Batch
+	for _, idx := range arg.OnDuplicateIdx {
+		if msg.Batch.Vecs[idx].GetType().Oid == types.T_Rowid {
+			rowIdIdx = idx
+			break
+		}
+	}
+	if rowIdIdx == -1 {
+		return result, moerr.NewConstraintViolation(proc.Ctx, "can not find rowid when insert with on duplicate key")
+	}
+
+	insertColCount := int(arg.InsertColCount) //columns without hidden columns
+	nulls := originBatch.Vecs[rowIdIdx].GetNulls()
+	oldRowIdVec := vector.MustFixedCol[types.Rowid](originBatch.Vecs[rowIdIdx])
+	if len(oldRowIdVec) == 0 || nulls.Count() == originBatch.RowCount() {
+		originBatch.Attrs = append([]string{}, arg.Attrs...)
+		result.Batch = originBatch
+		return result, nil
+	}
+
+	if arg.ctr.rbat == nil {
+		arg.ctr.rbat = batch.NewWithSize(len(arg.Attrs))
+		arg.ctr.rbat.Attrs = append([]string{}, arg.Attrs...)
+		for i, v := range originBatch.Vecs {
+			newVec := proc.GetVector(*v.GetType())
+			arg.ctr.rbat.SetVector(int32(i), newVec)
+		}
+	} else {
+		arg.ctr.rbat.CleanOnlyData()
+	}
+
+	for i := 0; i < originBatch.RowCount(); i++ {
+		if nulls.Contains(uint64(i)) {
+			for idx := range arg.ctr.rbat.Vecs {
+				if err := arg.ctr.rbat.Vecs[idx].UnionBatch(originBatch.Vecs[idx], int64(i), 1, nil, proc.Mp()); err != nil {
+					return result, err
+				}
+			}
+		} else {
+			// do update
+			newBatch, err := fetchOneRowAsBatch(i, originBatch, proc, arg.Attrs)
+			if err != nil {
+				return result, err
+			}
+			tmpBatch, err := updateOldBatch(newBatch, arg.OnDuplicateExpr, proc, insertColCount, arg.Attrs)
+			if err != nil {
+				newBatch.Clean(proc.GetMPool())
+				return result, err
+			}
+			arg.ctr.rbat.Append(proc.Ctx, proc.GetMPool(), tmpBatch)
+			proc.PutBatch(newBatch)
+			proc.PutBatch(tmpBatch)
+		}
+	}
+	arg.ctr.rbat.SetRowCount(arg.ctr.rbat.Vecs[0].Length())
+	result.Batch = arg.ctr.rbat
+
+	return result, nil
+}
+
+func (arg *Argument) callBlock(proc *process.Process) (vm.CallResult, error) {
+	anal := proc.GetAnalyze(arg.GetIdx(), arg.GetParallelIdx(), arg.GetParallelMajor())
+	anal.Start()
+	defer anal.Stop()
 	ctr := arg.ctr
 	result := vm.NewCallResult()
 	var err error

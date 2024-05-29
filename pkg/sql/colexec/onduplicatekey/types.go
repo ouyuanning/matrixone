@@ -53,6 +53,7 @@ type Argument struct {
 	UniqueCols         []string
 	OnDuplicateIdx     []int32
 	OnDuplicateExpr    map[string]*plan.Expr
+	UpdatePkOrUk       bool
 
 	IdxIdx []int32
 

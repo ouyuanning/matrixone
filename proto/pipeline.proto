@@ -194,6 +194,7 @@ message OnDuplicateKey{
   repeated int32 on_duplicate_idx		= 5;
   map<string, plan.Expr> on_duplicate_expr	= 6;
   bool is_ignore 						= 7;
+  bool update_pk_or_uk = 8;
 }
 
 message FuzzyFilter {

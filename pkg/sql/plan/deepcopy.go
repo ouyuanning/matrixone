@@ -65,10 +65,25 @@ func DeepCopyOnDupliateKeyCtx(ctx *plan.OnDuplicateKeyCtx) *plan.OnDuplicateKeyC
 		return nil
 	}
 	newCtx := &plan.OnDuplicateKeyCtx{
-		OnDuplicateIdx: make([]int32, len(ctx.OnDuplicateIdx)),
+		Attrs:              make([]string, len(ctx.Attrs)),
+		InsertColCount:     ctx.InsertColCount,
+		UniqueColCheckExpr: make([]*Expr, len(ctx.UniqueColCheckExpr)),
+		UniqueCols:         make([]string, len(ctx.UniqueCols)),
+		OnDuplicateIdx:     make([]int32, len(ctx.OnDuplicateIdx)),
+		IsIgnore:           ctx.IsIgnore,
+		TableName:          ctx.TableName,
+		TableId:            ctx.TableId,
+		TableVersion:       ctx.TableVersion,
+		UpdatePkOrUk:       ctx.UpdatePkOrUk,
 	}
 
+	copy(newCtx.Attrs, ctx.Attrs)
+	copy(newCtx.UniqueCols, ctx.UniqueCols)
 	copy(newCtx.OnDuplicateIdx, ctx.OnDuplicateIdx)
+
+	for k, v := range ctx.UniqueColCheckExpr {
+		newCtx.UniqueColCheckExpr[k] = DeepCopyExpr(v)
+	}
 
 	if ctx.OnDuplicateExpr != nil {
 		newCtx.OnDuplicateExpr = make(map[string]*Expr)

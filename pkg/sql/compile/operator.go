@@ -538,6 +538,7 @@ func constructOnduplicateKey(n *plan.Node, eg engine.Engine) *onduplicatekey.Arg
 	arg.UniqueCols = oldCtx.UniqueCols
 	arg.UniqueColCheckExpr = oldCtx.UniqueColCheckExpr
 	arg.IsIgnore = oldCtx.IsIgnore
+	arg.UpdatePkOrUk = oldCtx.UpdatePkOrUk
 	return arg
 }
 

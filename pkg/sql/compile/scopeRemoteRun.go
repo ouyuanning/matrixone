@@ -791,6 +791,7 @@ func convertToPipelineInstruction(opr *vm.Instruction, ctx *scopeContext, ctxId 
 			UniqueCols:         t.UniqueCols,
 			OnDuplicateIdx:     t.OnDuplicateIdx,
 			OnDuplicateExpr:    t.OnDuplicateExpr,
+			UpdatePkOrUk:       t.UpdatePkOrUk,
 		}
 	case *fuzzyfilter.Argument:
 		in.FuzzyFilter = &pipeline.FuzzyFilter{
@@ -1207,6 +1208,7 @@ func convertToVmInstruction(opr *pipeline.Instruction, ctx *scopeContext, eng en
 		arg.OnDuplicateIdx = t.OnDuplicateIdx
 		arg.OnDuplicateExpr = t.OnDuplicateExpr
 		arg.IsIgnore = t.IsIgnore
+		arg.UpdatePkOrUk = t.UpdatePkOrUk
 		v.Arg = arg
 	case vm.FuzzyFilter:
 		t := opr.GetFuzzyFilter()

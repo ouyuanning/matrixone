@@ -593,7 +593,8 @@ message OnDuplicateKeyCtx {
 	bool is_ignore 						= 7;
 	string table_name         = 8;
 	uint64 table_id           = 9;
-	uint32 table_version			= 10;
+	uint32 table_version		= 10;
+	bool update_pk_or_uk	= 11;
 }
 
 message InsertCtx {
