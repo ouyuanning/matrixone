@@ -203,7 +203,7 @@ func cnMessageHandle(receiver *messageReceiverOnServer) error {
 		defer func() {
 			c.proc.AnalInfos = nil
 			c.anal.analInfos = nil
-			c.Release()
+			c.Release(true)
 			s.release()
 		}()
 		if err != nil {

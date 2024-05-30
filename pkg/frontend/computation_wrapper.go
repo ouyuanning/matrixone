@@ -249,7 +249,7 @@ func (cwft *TxnComputationWrapper) Compile(any any, fill func(*batch.Batch) erro
 			}
 		} else {
 			// retComp
-			retComp.Reset(getStatementStartAt(execCtx.reqCtx))
+			retComp.Reset(cwft.proc, getStatementStartAt(execCtx.reqCtx))
 			cwft.compile = retComp
 		}
 
@@ -380,7 +380,7 @@ func (cwft *TxnComputationWrapper) GetUUID() []byte {
 
 func (cwft *TxnComputationWrapper) Run(ts uint64) (*util2.RunResult, error) {
 	runResult, err := cwft.compile.Run(ts)
-	cwft.compile.Release()
+	cwft.compile.Release(false)
 	cwft.runResult = runResult
 	cwft.compile = nil
 	return runResult, err
@@ -515,7 +515,7 @@ func createCompile(
 	)
 	defer func() {
 		if err != nil && retCompile != nil {
-			retCompile.Release()
+			retCompile.Release(false)
 		}
 	}()
 

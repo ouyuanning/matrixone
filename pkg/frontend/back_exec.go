@@ -374,7 +374,7 @@ func executeStmtInBack(backSes *backSession,
 
 	defer func() {
 		if c, ok := ret.(*compile.Compile); ok {
-			c.Release()
+			c.Release(false)
 		}
 	}()
 

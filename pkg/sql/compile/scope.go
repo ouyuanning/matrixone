@@ -96,6 +96,21 @@ func (s *Scope) release() {
 	reuse.Free[Scope](s, nil)
 }
 
+func (s *Scope) resetForReuse(c *Compile) (err error) {
+	if s.DataSource == nil {
+		return nil
+	}
+	if s.DataSource.isConst {
+		s.DataSource.Bat = nil
+	} else {
+		s.DataSource.Rel = nil
+	}
+	s.Proc.SetPrepareBatch(c.proc.GetPrepareBatch())
+	s.Proc.SetPrepareExprList(c.proc.GetPrepareExprList())
+	s.Proc.SetPrepareParams(c.proc.GetPrepareParams())
+	return nil
+}
+
 func (s *Scope) initDataSource(c *Compile) (err error) {
 	if s.DataSource == nil {
 		return nil
@@ -110,7 +125,7 @@ func (s *Scope) initDataSource(c *Compile) (err error) {
 		}
 		s.DataSource.Bat = bat
 	} else {
-		if s.DataSource.TableDef != nil {
+		if s.DataSource.Rel != nil {
 			return nil
 		}
 		return c.compileTableScanDataSource(s)
@@ -173,6 +188,20 @@ func (s *Scope) SetContextRecursively(ctx context.Context) {
 	for _, scope := range s.PreScopes {
 		scope.SetContextRecursively(newCtx)
 	}
+}
+
+func (s *Scope) Reset(c *Compile) error {
+	err := s.resetForReuse(c)
+	if err != nil {
+		return err
+	}
+	for _, scope := range s.PreScopes {
+		err := scope.Reset(c)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Scope) InitAllDataSource(c *Compile) error {

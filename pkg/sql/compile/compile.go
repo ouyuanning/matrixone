@@ -135,20 +135,19 @@ func NewCompile(
 	c.startAt = startAt
 	c.disableRetry = false
 	c.isPrepare = isParepare
-	if isParepare {
-		c.savePrepare = true
-	}
 	if c.proc.TxnOperator != nil {
 		c.proc.TxnOperator.GetWorkspace().UpdateSnapshotWriteOffset()
 	}
 	return c
 }
 
-func (c *Compile) Release() {
+func (c *Compile) Release(force bool) {
 	if c == nil {
 		return
 	}
-	reuse.Free[Compile](c, nil)
+	if force || !c.isPrepare {
+		reuse.Free[Compile](c, nil)
+	}
 }
 
 func (c Compile) TypeName() string {
@@ -169,11 +168,16 @@ func (c *Compile) GetMessageCenter() *process.MessageCenter {
 	return nil
 }
 
-func (c *Compile) Reset(startAt time.Time) {
+func (c *Compile) Reset(proc *process.Process, startAt time.Time) {
+	c.proc = proc
 	c.affectRows.Store(0)
 
 	for _, info := range c.anal.analInfos {
 		info.Reset()
+	}
+
+	for _, s := range c.scope {
+		s.Reset(c)
 	}
 
 	c.MessageBoard = c.MessageBoard.Reset()
@@ -218,7 +222,6 @@ func (c *Compile) clear() {
 	c.needLockMeta = false
 	c.isInternal = false
 	c.lastAllocID = 0
-	c.savePrepare = false
 	c.isPrepare = false
 
 	for k := range c.metaTables {
@@ -236,15 +239,6 @@ func (c *Compile) clear() {
 	for k := range c.cnLabel {
 		delete(c.cnLabel, k)
 	}
-}
-
-func (c *Compile) SavePrepare() bool {
-	return false
-	// return c.savePrepare
-}
-
-func (c *Compile) IsPrepare() bool {
-	return c.isPrepare
 }
 
 // helper function to judge if init temporary engine is needed
@@ -528,7 +522,7 @@ func (c *Compile) Run(_ uint64) (result *util2.RunResult, err error) {
 	var retryTimes int
 	releaseRunC := func() {
 		if runC != c {
-			runC.Release()
+			runC.Release(true)
 		}
 	}
 
@@ -621,7 +615,7 @@ func (c *Compile) prepareRetry(defChanged bool) (*Compile, error) {
 	runC := NewCompile(c.addr, c.db, c.sql, c.tenant, c.uid, c.proc.Ctx, c.e, c.proc, c.stmt, c.isInternal, c.cnLabel, c.startAt, c.isPrepare)
 	defer func() {
 		if e != nil {
-			runC.Release()
+			runC.Release(true)
 		}
 	}()
 	if defChanged {
@@ -2314,7 +2308,7 @@ func (c *Compile) compileRestrict(n *plan.Node, ss []*Scope) []*Scope {
 	}
 	currentFirstFlag := c.anal.isFirst
 	// for dynamic parameter, substitute param ref and const fold cast expression here to improve performance
-	newFilters, err := plan2.ConstandFoldList(n.FilterList, c.proc, true)
+	newFilters, err := plan2.ConstandFoldList(n.FilterList, c.proc, false)
 	if err != nil {
 		newFilters = n.FilterList
 	}
