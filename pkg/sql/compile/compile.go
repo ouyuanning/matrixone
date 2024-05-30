@@ -117,6 +117,7 @@ func NewCompile(
 	isInternal bool,
 	cnLabel map[string]string,
 	startAt time.Time,
+	isParepare bool,
 ) *Compile {
 	c := reuse.Alloc[Compile](nil)
 	c.e = e
@@ -133,6 +134,10 @@ func NewCompile(
 	c.cnLabel = cnLabel
 	c.startAt = startAt
 	c.disableRetry = false
+	c.isPrepare = isParepare
+	if isParepare {
+		c.savePrepare = true
+	}
 	if c.proc.TxnOperator != nil {
 		c.proc.TxnOperator.GetWorkspace().UpdateSnapshotWriteOffset()
 	}
@@ -213,6 +218,8 @@ func (c *Compile) clear() {
 	c.needLockMeta = false
 	c.isInternal = false
 	c.lastAllocID = 0
+	c.savePrepare = false
+	c.isPrepare = false
 
 	for k := range c.metaTables {
 		delete(c.metaTables, k)
@@ -229,6 +236,15 @@ func (c *Compile) clear() {
 	for k := range c.cnLabel {
 		delete(c.cnLabel, k)
 	}
+}
+
+func (c *Compile) SavePrepare() bool {
+	return false
+	// return c.savePrepare
+}
+
+func (c *Compile) IsPrepare() bool {
+	return c.isPrepare
 }
 
 // helper function to judge if init temporary engine is needed
@@ -602,7 +618,7 @@ func (c *Compile) prepareRetry(defChanged bool) (*Compile, error) {
 	// improved to refresh expression in the future.
 
 	var e error
-	runC := NewCompile(c.addr, c.db, c.sql, c.tenant, c.uid, c.proc.Ctx, c.e, c.proc, c.stmt, c.isInternal, c.cnLabel, c.startAt)
+	runC := NewCompile(c.addr, c.db, c.sql, c.tenant, c.uid, c.proc.Ctx, c.e, c.proc, c.stmt, c.isInternal, c.cnLabel, c.startAt, c.isPrepare)
 	defer func() {
 		if e != nil {
 			runC.Release()
@@ -3897,6 +3913,7 @@ func (c *Compile) generateNodes(n *plan.Node) (engine.Nodes, []any, []types.T, e
 	}
 
 	if c.determinExpandRanges(n) {
+		c.savePrepare = false
 		ranges, err = c.expandRanges(n, rel, n.BlockFilterList)
 		if err != nil {
 			return nil, nil, nil, err

@@ -374,3 +374,7 @@ func NewKeyAlreadyExistsNoCtx() *Error {
 func NewArenaFullNoCtx() *Error {
 	return newError(Context(), ErrArenaFull)
 }
+
+func NewCantCompileForPrepareNoCtx() *Error {
+	return newError(Context(), ErrCantCompileForPrepare)
+}
