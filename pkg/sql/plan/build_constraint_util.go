@@ -1729,3 +1729,79 @@ func appendPrimaryConstrantPlan(
 
 	return nil
 }
+
+func appendPlanToCheckInsertUnique(
+	builder *QueryBuilder,
+	bindCtx *BindContext,
+	tableDef *TableDef,
+	indexSourceColTypes []*plan.Type,
+	sourceStep int32,
+) error {
+	var err error
+	pkPos, pkTyp := getPkPos(tableDef, true)
+	if pkPos == -1 {
+		return nil
+	}
+
+	// make plan: group_by -> filter  //check if pk is unique in rows
+	lastNodeId := appendSinkScanNode(builder, bindCtx, sourceStep)
+	pkColExpr := &plan.Expr{
+		Typ: pkTyp,
+		Expr: &plan.Expr_Col{
+			Col: &plan.ColRef{
+				ColPos: int32(pkPos),
+				Name:   tableDef.Pkey.PkeyColName,
+			},
+		},
+	}
+	lastNodeId, err = appendAggCountGroupByColExpr(builder, bindCtx, lastNodeId, pkColExpr)
+	if err != nil {
+		return err
+	}
+
+	countType := types.T_int64.ToType()
+	countColExpr := &plan.Expr{
+		Typ: makePlan2TypeValue(&countType),
+		Expr: &plan.Expr_Col{
+			Col: &plan.ColRef{
+				Name: tableDef.Pkey.PkeyColName,
+			},
+		},
+	}
+
+	eqCheckExpr, err := BindFuncExprImplByPlanExpr(builder.GetContext(), "=", []*Expr{MakePlan2Int64ConstExprWithType(1), countColExpr})
+	if err != nil {
+		return err
+	}
+	varcharType := types.T_varchar.ToType()
+	varcharExpr, err := makePlan2CastExpr(builder.GetContext(), &Expr{
+		Typ: tableDef.Cols[pkPos].Typ,
+		Expr: &plan.Expr_Col{
+			Col: &plan.ColRef{ColPos: 1, Name: tableDef.Cols[pkPos].Name},
+		},
+	}, makePlan2Type(&varcharType))
+	if err != nil {
+		return err
+	}
+	colTypes := string("")
+	for i := range indexSourceColTypes {
+		if types.T(indexSourceColTypes[i].Id).IsDecimal() {
+			colTypes = colTypes + string(byte(indexSourceColTypes[i].Scale))
+		} else {
+			colTypes = colTypes + "0"
+		}
+	}
+	filterExpr, err := BindFuncExprImplByPlanExpr(builder.GetContext(), "assert", []*Expr{eqCheckExpr, varcharExpr, makePlan2StringConstExprWithType(tableDef.Cols[pkPos].Name), makePlan2StringConstExprWithType(colTypes)})
+	if err != nil {
+		return err
+	}
+	filterNode := &Node{
+		NodeType:   plan.Node_FILTER,
+		Children:   []int32{lastNodeId},
+		FilterList: []*Expr{filterExpr},
+		IsEnd:      true,
+	}
+	lastNodeId = builder.appendNode(filterNode, bindCtx)
+	builder.appendStep(lastNodeId)
+	return nil
+}

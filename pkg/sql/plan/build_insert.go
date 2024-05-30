@@ -207,9 +207,9 @@ func buildInsert(stmt *tree.Insert, ctx CompilerContext, isReplace bool, isPrepa
 			uniqueCol[i] = strings.Join(keys, ",")
 		}
 		onDuplicateKeyNode := &Node{
-			NodeType:    plan.Node_ON_DUPLICATE_KEY,
-			Children:    []int32{lastNodeId},
-			ProjectList: dupProjection,
+			NodeType: plan.Node_ON_DUPLICATE_KEY,
+			Children: []int32{lastNodeId},
+			// ProjectList: dupProjection,
 			OnDuplicateKey: &plan.OnDuplicateKeyCtx{
 				Attrs:              attrs,
 				InsertColCount:     insertColCount,
@@ -276,6 +276,14 @@ func buildInsert(stmt *tree.Insert, ctx CompilerContext, isReplace bool, isPrepa
 		// append sink node
 		lastNodeId = appendSinkNode(builder, bindCtx, lastNodeId)
 		sourceStep = builder.appendStep(lastNodeId)
+
+		if !rewriteInfo.onDuplicateUpdatePkOrUniqueCol {
+			// var indexSourceColTypes []*plan.Type
+			// err := appendPlanToCheckInsertUnique(builder, bindCtx, tableDef, indexSourceColTypes, sourceStep)
+			// if err != nil {
+			// 	return nil, err
+			// }
+		}
 
 		// append plans like update
 		updateBindCtx := NewBindContext(builder, nil)
