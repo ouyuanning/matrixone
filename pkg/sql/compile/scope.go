@@ -104,6 +104,7 @@ func (s *Scope) resetForReuse(c *Compile) (err error) {
 		s.DataSource.Bat = nil
 	} else {
 		s.DataSource.Rel = nil
+		s.DataSource.R = nil
 	}
 	s.Proc.SetPrepareBatch(c.proc.GetPrepareBatch())
 	s.Proc.SetPrepareExprList(c.proc.GetPrepareExprList())
@@ -144,7 +145,7 @@ func (s *Scope) Run(c *Compile) (err error) {
 				zap.String("error", err.Error()))
 		}
 		if p != nil {
-			p.Cleanup(s.Proc, err != nil, err)
+			p.Cleanup(s.Proc, err != nil, c.isPrepare, err)
 		}
 	}()
 
@@ -276,11 +277,11 @@ func (s *Scope) MergeRun(c *Compile) error {
 		select {
 		case <-s.Proc.Ctx.Done():
 		default:
-			p.Cleanup(s.Proc, true, err)
+			p.Cleanup(s.Proc, true, c.isPrepare, err)
 			return err
 		}
 	}
-	p.Cleanup(s.Proc, false, nil)
+	p.Cleanup(s.Proc, false, c.isPrepare, nil)
 
 	// receive and check error from pre-scopes and remote scopes.
 	preScopeCount := len(s.PreScopes)
@@ -332,11 +333,11 @@ func (s *Scope) RemoteRun(c *Compile) error {
 	case <-s.Proc.Ctx.Done():
 		// this clean-up action shouldn't be called before context check.
 		// because the clean-up action will cancel the context, and error will be suppressed.
-		p.Cleanup(s.Proc, err != nil, err)
+		p.Cleanup(s.Proc, err != nil, c.isPrepare, err)
 		return nil
 
 	default:
-		p.Cleanup(s.Proc, err != nil, err)
+		p.Cleanup(s.Proc, err != nil, c.isPrepare, err)
 		return err
 	}
 }
@@ -356,7 +357,7 @@ func (s *Scope) ParallelRun(c *Compile) (err error) {
 		// if codes run here, it means some error happens during build the parallel scope.
 		// we should do clean work for source-scope to avoid receiver hung.
 		if parallelScope == nil {
-			pipeline.NewMerge(s.Instructions, s.Reg).Cleanup(s.Proc, true, err)
+			pipeline.NewMerge(s.Instructions, s.Reg).Cleanup(s.Proc, true, c.isPrepare, err)
 		}
 	}()
 
@@ -395,13 +396,15 @@ func (s *Scope) ParallelRun(c *Compile) (err error) {
 func buildJoinParallelRun(s *Scope, c *Compile) (*Scope, error) {
 	mcpu := s.NodeInfo.Mcpu
 	if mcpu <= 1 { // no need to parallel
-		buildScope := c.newJoinBuildScope(s, nil)
-		s.PreScopes = append(s.PreScopes, buildScope)
-		if s.BuildIdx > 1 {
-			probeScope := c.newJoinProbeScope(s, nil)
-			s.PreScopes = append(s.PreScopes, probeScope)
+		if !c.isPrepare {
+			buildScope := c.newJoinBuildScope(s, nil)
+			s.PreScopes = append(s.PreScopes, buildScope)
+			if s.BuildIdx > 1 {
+				probeScope := c.newJoinProbeScope(s, nil)
+				s.PreScopes = append(s.PreScopes, probeScope)
+			}
+			return s, nil
 		}
-		return s, nil
 	}
 
 	isRight := s.isRight()
@@ -681,10 +684,12 @@ func buildScanParallelRun(s *Scope, c *Compile) (*Scope, error) {
 
 	// only one scan reader, it can just run without any merge.
 	if scanUsedCpuNumber == 1 {
-		s.Magic = Normal
-		s.DataSource.R = readers[0]
-		s.DataSource.R.SetOrderBy(s.DataSource.OrderBy)
-		return s, nil
+		if !c.isPrepare {
+			s.Magic = Normal
+			s.DataSource.R = readers[0]
+			s.DataSource.R.SetOrderBy(s.DataSource.OrderBy)
+			return s, nil
+		}
 	}
 
 	if len(s.DataSource.OrderBy) > 0 {
@@ -702,6 +707,8 @@ func buildScanParallelRun(s *Scope, c *Compile) (*Scope, error) {
 			RelationName: s.DataSource.RelationName,
 			Attributes:   s.DataSource.Attributes,
 			AccountId:    s.DataSource.AccountId,
+
+			node: s.DataSource.node,
 		}
 		readerScopes[i].Proc = process.NewWithAnalyze(s.Proc, c.ctx, 0, c.anal.Nodes())
 	}
