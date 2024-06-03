@@ -106,6 +106,8 @@ const (
 var (
 	ncpu           = runtime.GOMAXPROCS(0)
 	ctxCancelError = context.Canceled.Error()
+
+	cantCompileForPrepareErr = moerr.NewCantCompileForPrepareNoCtx()
 )
 
 // NewCompile is used to new an object of compile
@@ -1007,6 +1009,11 @@ func (c *Compile) compileQuery(ctx context.Context, qry *plan.Query) ([]*Scope, 
 	}()
 
 	c.execType = plan2.GetExecType(c.pn.GetQuery())
+	if c.isPrepare {
+		if c.execType != plan2.ExecTypeTP {
+			return nil, cantCompileForPrepareErr
+		}
+	}
 	n := getEngineNode(c)
 	if c.execType == plan2.ExecTypeTP || c.execType == plan2.ExecTypeAP_ONECN {
 		c.cnList = engine.Nodes{n}
@@ -3876,7 +3883,7 @@ func (c *Compile) generateNodes(n *plan.Node) (engine.Nodes, []any, []types.T, e
 
 	if c.determinExpandRanges(n) {
 		if c.isPrepare {
-			return nil, nil, nil, moerr.NewCantCompileForPrepare(c.ctx)
+			return nil, nil, nil, cantCompileForPrepareErr
 		}
 		db, err = c.e.Database(ctx, n.ObjRef.SchemaName, txnOp)
 		if err != nil {

@@ -468,8 +468,8 @@ func replacePlan(reqCtx context.Context, ses *Session, cwft *TxnComputationWrapp
 			return nil, nil, nil, originSQL, moerr.NewInvalidInput(reqCtx, "Incorrect arguments to EXECUTE")
 		}
 	}
-	// return prepareStmt.compile, preparePlan.Plan, prepareStmt.PrepareStmt, originSQL, nil
-	return nil, preparePlan.Plan, prepareStmt.PrepareStmt, originSQL, nil
+	return prepareStmt.compile, preparePlan.Plan, prepareStmt.PrepareStmt, originSQL, nil
+	// return nil, preparePlan.Plan, prepareStmt.PrepareStmt, originSQL, nil
 }
 
 func createCompile(

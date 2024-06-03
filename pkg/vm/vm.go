@@ -125,8 +125,10 @@ func Run(ins Instructions, proc *process.Process) (end bool, err error) {
 
 	setAnalyzeInfo(ins, proc)
 
-	for i := 1; i < len(ins); i++ {
-		ins[i].Arg.AppendChild(ins[i-1].Arg)
+	if ins[len(ins)-1].Arg.GetOperatorBase().NumChildren() == 0 {
+		for i := 1; i < len(ins); i++ {
+			ins[i].Arg.AppendChild(ins[i-1].Arg)
+		}
 	}
 
 	root := ins[len(ins)-1].Arg

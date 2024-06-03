@@ -29,6 +29,8 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/sql/colexec/right"
 	"github.com/matrixorigin/matrixone/pkg/sql/colexec/rightanti"
 	"github.com/matrixorigin/matrixone/pkg/sql/colexec/rightsemi"
+	"github.com/matrixorigin/matrixone/pkg/sql/colexec/table_scan"
+	"github.com/matrixorigin/matrixone/pkg/sql/colexec/value_scan"
 	"github.com/matrixorigin/matrixone/pkg/sql/util"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/disttae"
@@ -134,6 +136,36 @@ func (s *Scope) initDataSource(c *Compile) (err error) {
 	return nil
 }
 
+func (s *Scope) appendTableScanNode() {
+	if _, ok := s.Instructions[0].Arg.(*table_scan.Argument); !ok {
+		tableScanOperator := table_scan.Argument{}
+		s.Instructions = append([]vm.Instruction{
+			{
+				Op:      vm.TableScan,
+				Idx:     -1,
+				Arg:     &tableScanOperator,
+				IsFirst: true,
+				IsLast:  false,
+			},
+		}, s.Instructions...)
+	}
+}
+
+func (s *Scope) appendValueScanNode() {
+	if _, ok := s.Instructions[0].Arg.(*value_scan.Argument); !ok {
+		valueScanOperator := value_scan.Argument{}
+		s.Instructions = append([]vm.Instruction{
+			{
+				Op:      vm.ValueScan,
+				Idx:     -1,
+				Arg:     &valueScanOperator,
+				IsFirst: true,
+				IsLast:  false,
+			},
+		}, s.Instructions...)
+	}
+}
+
 // Run read data from storage engine and run the instructions of scope.
 func (s *Scope) Run(c *Compile) (err error) {
 	var p *pipeline.Pipeline
@@ -152,6 +184,7 @@ func (s *Scope) Run(c *Compile) (err error) {
 	s.Proc.Ctx = context.WithValue(s.Proc.Ctx, defines.EngineKey{}, c.e)
 	// DataSource == nil specify the empty scan
 	if s.DataSource == nil {
+		s.appendValueScanNode()
 		p = pipeline.New(0, nil, s.Instructions, s.Reg)
 		if _, err = p.ConstRun(nil, s.Proc); err != nil {
 			return err
@@ -161,10 +194,40 @@ func (s *Scope) Run(c *Compile) (err error) {
 		if s.DataSource.TableDef != nil {
 			id = s.DataSource.TableDef.TblId
 		}
-		p = pipeline.New(id, s.DataSource.Attributes, s.Instructions, s.Reg)
 		if s.DataSource.isConst {
+			s.appendValueScanNode()
+			p = pipeline.New(id, s.DataSource.Attributes, s.Instructions, s.Reg)
 			_, err = p.ConstRun(s.DataSource.Bat, s.Proc)
 		} else {
+			s.appendTableScanNode()
+			p = pipeline.New(id, s.DataSource.Attributes, s.Instructions, s.Reg)
+			if s.DataSource.R == nil {
+				if err := s.handleRuntimeFilter(c); err != nil {
+					return err
+				}
+				maxProvidedCpuNumber := goruntime.GOMAXPROCS(0)
+				var scanUsedCpuNumber int
+				switch s.DataSource.Rel.GetEngineType() {
+				case engine.Disttae:
+					blkSlice := objectio.BlockInfoSlice(s.NodeInfo.Data)
+					scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, blkSlice.Len())
+				case engine.Memory:
+					idSlice := memoryengine.ShardIdSlice(s.NodeInfo.Data)
+					scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, idSlice.Len())
+				default:
+					scanUsedCpuNumber = 1
+				}
+				if len(s.DataSource.OrderBy) > 0 {
+					scanUsedCpuNumber = 1
+				}
+
+				readers, err := s.DataSource.Rel.NewReader(c.ctx, scanUsedCpuNumber, s.DataSource.FilterExpr, s.NodeInfo.Data, len(s.DataSource.OrderBy) > 0)
+				if err != nil {
+					return err
+				}
+				s.DataSource.R = readers[0]
+			}
+
 			var tag int32
 			if s.DataSource.node != nil && len(s.DataSource.node.RecvMsgList) > 0 {
 				tag = s.DataSource.node.RecvMsgList[0].MsgTag
@@ -396,15 +459,13 @@ func (s *Scope) ParallelRun(c *Compile) (err error) {
 func buildJoinParallelRun(s *Scope, c *Compile) (*Scope, error) {
 	mcpu := s.NodeInfo.Mcpu
 	if mcpu <= 1 { // no need to parallel
-		if !c.isPrepare {
-			buildScope := c.newJoinBuildScope(s, nil)
-			s.PreScopes = append(s.PreScopes, buildScope)
-			if s.BuildIdx > 1 {
-				probeScope := c.newJoinProbeScope(s, nil)
-				s.PreScopes = append(s.PreScopes, probeScope)
-			}
-			return s, nil
+		buildScope := c.newJoinBuildScope(s, nil)
+		s.PreScopes = append(s.PreScopes, buildScope)
+		if s.BuildIdx > 1 {
+			probeScope := c.newJoinProbeScope(s, nil)
+			s.PreScopes = append(s.PreScopes, probeScope)
 		}
+		return s, nil
 	}
 
 	isRight := s.isRight()
@@ -684,12 +745,10 @@ func buildScanParallelRun(s *Scope, c *Compile) (*Scope, error) {
 
 	// only one scan reader, it can just run without any merge.
 	if scanUsedCpuNumber == 1 {
-		if !c.isPrepare {
-			s.Magic = Normal
-			s.DataSource.R = readers[0]
-			s.DataSource.R.SetOrderBy(s.DataSource.OrderBy)
-			return s, nil
-		}
+		s.Magic = Normal
+		s.DataSource.R = readers[0]
+		s.DataSource.R.SetOrderBy(s.DataSource.OrderBy)
+		return s, nil
 	}
 
 	if len(s.DataSource.OrderBy) > 0 {
@@ -820,7 +879,7 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 			return err
 		}
 		s.NodeInfo.Data = append(s.NodeInfo.Data, ranges.GetAllBytes()...)
-		s.NodeInfo.NeedExpandRanges = false
+		// s.NodeInfo.NeedExpandRanges = false
 
 	} else if len(inExprList) > 0 {
 		s.NodeInfo.Data, err = ApplyRuntimeFilters(c.ctx, s.Proc, s.DataSource.TableDef, s.NodeInfo.Data, exprs, filters)
