@@ -2313,8 +2313,6 @@ func (c *Compile) compileTableScanDataSource(s *Scope) error {
 	s.DataSource.RuntimeFilterSpecs = n.RuntimeFilterProbeList
 	s.DataSource.OrderBy = n.OrderBy
 
-	s.NodeInfo.Data = s.NodeInfo.Data[:0]
-
 	return nil
 }
 

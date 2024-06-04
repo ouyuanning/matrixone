@@ -201,6 +201,7 @@ func (s *Scope) Run(c *Compile) (err error) {
 			s.appendTableScanNode()
 			p = pipeline.New(id, s.DataSource.Attributes, s.Instructions, s.Reg)
 			if s.DataSource.R == nil {
+				s.NodeInfo.Data = s.NodeInfo.Data[:0]
 				if err := s.handleRuntimeFilter(c); err != nil {
 					return err
 				}
