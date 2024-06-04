@@ -375,6 +375,14 @@ func NewArenaFullNoCtx() *Error {
 	return newError(Context(), ErrArenaFull)
 }
 
+func NewReplicaNotFound(replica string) *Error {
+	return newError(Context(), ErrReplicaNotFound, replica)
+}
+
+func NewReplicaNotMatch(current, received string) *Error {
+	return newError(Context(), ErrReplicaNotMatch, current, received)
+}
+
 func NewCantCompileForPrepareNoCtx() *Error {
 	return newError(Context(), ErrCantCompileForPrepare)
 }
