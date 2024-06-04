@@ -98,6 +98,20 @@ func (s *Scope) release() {
 }
 
 func (s *Scope) resetForReuse(c *Compile) (err error) {
+	if s.Proc != nil {
+		newctx, cancel := context.WithCancel(c.ctx)
+		s.Proc.SetPrepareBatch(c.proc.GetPrepareBatch())
+		s.Proc.SetPrepareExprList(c.proc.GetPrepareExprList())
+		s.Proc.SetPrepareParams(c.proc.GetPrepareParams())
+		s.Proc.TxnClient = c.proc.TxnClient
+		s.Proc.TxnOperator = c.proc.TxnOperator
+		s.Proc.SessionInfo = c.proc.SessionInfo
+		s.Proc.UnixTime = c.proc.UnixTime
+		s.Proc.LastInsertID = c.proc.LastInsertID
+		s.Proc.MessageBoard = c.proc.MessageBoard
+		s.Proc.Ctx = newctx
+		s.Proc.Cancel = cancel
+	}
 	if s.DataSource == nil {
 		return nil
 	}
@@ -107,9 +121,6 @@ func (s *Scope) resetForReuse(c *Compile) (err error) {
 		s.DataSource.Rel = nil
 		s.DataSource.R = nil
 	}
-	s.Proc.SetPrepareBatch(c.proc.GetPrepareBatch())
-	s.Proc.SetPrepareExprList(c.proc.GetPrepareExprList())
-	s.Proc.SetPrepareParams(c.proc.GetPrepareParams())
 	return nil
 }
 
