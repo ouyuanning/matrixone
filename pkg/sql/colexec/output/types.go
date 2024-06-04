@@ -24,8 +24,8 @@ import (
 var _ vm.Operator = new(Argument)
 
 type Argument struct {
-	Data interface{}
-	Func func(*batch.Batch) error
+	IsFuzzy bool
+	Func    func(*batch.Batch) error
 
 	vm.OperatorBase
 }
@@ -55,8 +55,8 @@ func NewArgument() *Argument {
 	return reuse.Alloc[Argument](nil)
 }
 
-func (arg *Argument) WithData(data interface{}) *Argument {
-	arg.Data = data
+func (arg *Argument) WithIsFuzzy(flag bool) *Argument {
+	arg.IsFuzzy = flag
 	return arg
 }
 
@@ -79,4 +79,5 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 	if !pipelineFailed {
 		_ = arg.Func(nil)
 	}
+	arg.IsFuzzy = false
 }

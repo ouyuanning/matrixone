@@ -169,8 +169,9 @@ func (c *Compile) GetMessageCenter() *process.MessageCenter {
 	return nil
 }
 
-func (c *Compile) Reset(proc *process.Process, startAt time.Time) {
+func (c *Compile) Reset(proc *process.Process, startAt time.Time, fill func(*batch.Batch) error) {
 	c.proc = proc
+	c.fill = fill
 	c.proc.Ctx = perfcounter.WithCounterSet(c.proc.Ctx, c.counterSet)
 	c.ctx = c.proc.Ctx
 	c.proc.Ctx = context.WithValue(c.proc.Ctx, defines.EngineKey{}, c.e)
@@ -2977,6 +2978,7 @@ func (c *Compile) compileFuzzyFilter(n *plan.Node, ns []*plan.Node, left []*Scop
 	rs.appendInstruction(vm.Instruction{
 		Op: vm.Output,
 		Arg: output.NewArgument().
+			WithIsFuzzy(true).
 			WithFunc(
 				func(bat *batch.Batch) error {
 					if bat == nil || bat.IsEmpty() {

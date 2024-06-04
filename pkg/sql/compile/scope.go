@@ -26,6 +26,7 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/common/bitmap"
 	"github.com/matrixorigin/matrixone/pkg/objectio"
 	"github.com/matrixorigin/matrixone/pkg/pb/timestamp"
+	"github.com/matrixorigin/matrixone/pkg/sql/colexec/output"
 	"github.com/matrixorigin/matrixone/pkg/sql/colexec/right"
 	"github.com/matrixorigin/matrixone/pkg/sql/colexec/rightanti"
 	"github.com/matrixorigin/matrixone/pkg/sql/colexec/rightsemi"
@@ -111,6 +112,13 @@ func (s *Scope) resetForReuse(c *Compile) (err error) {
 		s.Proc.MessageBoard = c.proc.MessageBoard
 		s.Proc.Ctx = newctx
 		s.Proc.Cancel = cancel
+	}
+	for _, ins := range s.Instructions {
+		if ins.Op == vm.Output {
+			if !ins.Arg.(*output.Argument).IsFuzzy {
+				ins.Arg.(*output.Argument).Func = c.fill
+			}
+		}
 	}
 	if s.DataSource == nil {
 		return nil

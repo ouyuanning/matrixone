@@ -55,8 +55,8 @@ func init() {
 				types.T_int8.ToType(),
 			},
 			arg: &Argument{
-				Data: nil,
-				Func: sqlOutput,
+				IsFuzzy: false,
+				Func:    sqlOutput,
 				OperatorBase: vm.OperatorBase{
 					OperatorInfo: vm.OperatorInfo{
 						Idx:     0,
