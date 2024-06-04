@@ -171,6 +171,9 @@ func (c *Compile) GetMessageCenter() *process.MessageCenter {
 
 func (c *Compile) Reset(proc *process.Process, startAt time.Time) {
 	c.proc = proc
+	c.proc.Ctx = perfcounter.WithCounterSet(c.proc.Ctx, c.counterSet)
+	c.ctx = c.proc.Ctx
+	c.proc.Ctx = context.WithValue(c.proc.Ctx, defines.EngineKey{}, c.e)
 	c.affectRows.Store(0)
 
 	for _, info := range c.anal.analInfos {
@@ -188,6 +191,9 @@ func (c *Compile) Reset(proc *process.Process, startAt time.Time) {
 		f.reset()
 	}
 	c.startAt = startAt
+	if c.proc.TxnOperator != nil {
+		c.proc.TxnOperator.GetWorkspace().UpdateSnapshotWriteOffset()
+	}
 }
 
 func (c *Compile) clear() {
@@ -2306,6 +2312,8 @@ func (c *Compile) compileTableScanDataSource(s *Scope) error {
 	s.DataSource.FilterExpr = filterExpr
 	s.DataSource.RuntimeFilterSpecs = n.RuntimeFilterProbeList
 	s.DataSource.OrderBy = n.OrderBy
+
+	s.NodeInfo.Data = s.NodeInfo.Data[:0]
 
 	return nil
 }

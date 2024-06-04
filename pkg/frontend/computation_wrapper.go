@@ -249,6 +249,7 @@ func (cwft *TxnComputationWrapper) Compile(any any, fill func(*batch.Batch) erro
 			}
 		} else {
 			// retComp
+			cwft.proc.Ctx = execCtx.reqCtx
 			retComp.Reset(cwft.proc, getStatementStartAt(execCtx.reqCtx))
 			cwft.compile = retComp
 		}
