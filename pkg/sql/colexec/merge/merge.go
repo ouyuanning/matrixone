@@ -64,6 +64,7 @@ func (arg *Argument) Call(proc *process.Process) (vm.CallResult, error) {
 		arg.buf = msg.Batch
 		if arg.buf.Last() && arg.SinkScan {
 			proc.PutBatch(arg.buf)
+			arg.buf = nil
 			continue
 		}
 		break

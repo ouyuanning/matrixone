@@ -92,6 +92,7 @@ func (arg *Argument) Call(proc *process.Process) (vm.CallResult, error) {
 				break
 			} else {
 				proc.PutBatch(arg.buf)
+				arg.buf = nil
 			}
 		}
 	}

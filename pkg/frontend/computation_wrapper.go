@@ -243,14 +243,15 @@ func (cwft *TxnComputationWrapper) Compile(any any, fill func(*batch.Batch) erro
 		}
 
 		if retComp == nil {
-			cwft.compile, err = createCompile(execCtx, cwft.ses, cwft.proc, originSQL, cwft.stmt, cwft.plan, fill, false)
+			cwft.compile, err = createCompile(execCtx, cwft.ses, cwft.proc, cwft.ses.GetSql(), cwft.stmt, cwft.plan, fill, false)
 			if err != nil {
 				return nil, err
 			}
+			cwft.compile.SetOriginSQL(originSQL)
 		} else {
 			// retComp
 			cwft.proc.Ctx = execCtx.reqCtx
-			retComp.Reset(cwft.proc, getStatementStartAt(execCtx.reqCtx), fill)
+			retComp.Reset(cwft.proc, getStatementStartAt(execCtx.reqCtx), fill, cwft.ses.GetSql())
 			cwft.compile = retComp
 		}
 

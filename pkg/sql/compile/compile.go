@@ -169,9 +169,10 @@ func (c *Compile) GetMessageCenter() *process.MessageCenter {
 	return nil
 }
 
-func (c *Compile) Reset(proc *process.Process, startAt time.Time, fill func(*batch.Batch) error) {
+func (c *Compile) Reset(proc *process.Process, startAt time.Time, fill func(*batch.Batch) error, sql string) {
 	c.proc = proc
 	c.fill = fill
+	c.sql = sql
 	c.proc.Ctx = perfcounter.WithCounterSet(c.proc.Ctx, c.counterSet)
 	c.ctx = c.proc.Ctx
 	c.proc.Ctx = context.WithValue(c.proc.Ctx, defines.EngineKey{}, c.e)
