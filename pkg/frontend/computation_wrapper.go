@@ -29,13 +29,11 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/pb/plan"
 	"github.com/matrixorigin/matrixone/pkg/pb/timestamp"
 	"github.com/matrixorigin/matrixone/pkg/sql/compile"
-	"github.com/matrixorigin/matrixone/pkg/sql/parsers/dialect"
 	"github.com/matrixorigin/matrixone/pkg/sql/parsers/tree"
 	plan2 "github.com/matrixorigin/matrixone/pkg/sql/plan"
 	"github.com/matrixorigin/matrixone/pkg/sql/util"
 	"github.com/matrixorigin/matrixone/pkg/txn/clock"
 	"github.com/matrixorigin/matrixone/pkg/txn/storage/memorystorage"
-	txnTrace "github.com/matrixorigin/matrixone/pkg/txn/trace"
 	util2 "github.com/matrixorigin/matrixone/pkg/util"
 	"github.com/matrixorigin/matrixone/pkg/util/trace"
 	"github.com/matrixorigin/matrixone/pkg/util/trace/impl/motrace/statistic"
@@ -413,10 +411,11 @@ func replacePlan(reqCtx context.Context, ses *Session, cwft *TxnComputationWrapp
 	if err != nil {
 		return nil, nil, nil, originSQL, err
 	}
-	if txnTrace.GetService().Enabled(txnTrace.FeatureTraceTxn) {
-		originSQL = tree.String(prepareStmt.PrepareStmt, dialect.MYSQL)
-	}
+	// if txnTrace.GetService().Enabled(txnTrace.FeatureTraceTxn) {
+	// 	originSQL = tree.String(prepareStmt.PrepareStmt, dialect.MYSQL)
+	// }
 	preparePlan := prepareStmt.PreparePlan.GetDcl().GetPrepare()
+	originSQL = prepareStmt.Sql
 
 	// TODO check if schema change, obj.Obj is zero all the time in 0.6
 	for _, obj := range preparePlan.GetSchemas() {
