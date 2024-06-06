@@ -97,6 +97,7 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 		ctr.FreeAllReg()
 		arg.ctr = nil
 	}
+	arg.lastrow = 0
 }
 
 func (ctr *container) cleanBatch(mp *mpool.MPool) {
