@@ -26,10 +26,11 @@ import (
 var _ vm.Operator = new(Argument)
 
 type Argument struct {
-	ctr   *container
-	E     *plan.Expr
-	IsEnd bool
-	buf   *batch.Batch
+	ctr     *container
+	E       *plan.Expr
+	exeExpr *plan.Expr
+	IsEnd   bool
+	buf     *batch.Batch
 
 	vm.OperatorBase
 }
@@ -69,6 +70,10 @@ type container struct {
 	executors []colexec.ExpressionExecutor
 }
 
+func (arg *Argument) SetExeExpr(e *plan.Expr) {
+	arg.exeExpr = e
+}
+
 func (arg *Argument) Reset(proc *process.Process, pipelineFailed bool, err error) {
 	arg.Free(proc, pipelineFailed, err)
 }
@@ -78,6 +83,7 @@ func (arg *Argument) Free(proc *process.Process, pipelineFailed bool, err error)
 		arg.ctr.cleanExecutor()
 		arg.ctr = nil
 	}
+	arg.exeExpr = nil
 }
 
 func (ctr *container) cleanExecutor() {

@@ -642,7 +642,7 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 				case process.RuntimeFilter_DROP:
 					// FIXME: Should give an empty "Data" and then early return
 					s.NodeInfo.Data = nil
-					s.NodeInfo.NeedExpandRanges = false
+					// s.NodeInfo.NeedExpandRanges = false
 					s.DataSource.FilterExpr = plan2.MakeFalseExpr()
 					return nil
 				case process.RuntimeFilter_IN:
@@ -689,7 +689,7 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 			if arg.E != nil {
 				newExprList = append(newExprList, arg.E)
 			}
-			arg.E = colexec.RewriteFilterExprList(newExprList)
+			arg.SetExeExpr(colexec.RewriteFilterExprList(newExprList))
 		}
 	}
 

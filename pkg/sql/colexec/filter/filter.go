@@ -39,7 +39,12 @@ func (arg *Argument) String(buf *bytes.Buffer) {
 func (arg *Argument) Prepare(proc *process.Process) (err error) {
 	arg.ctr = new(container)
 
-	filterList := colexec.SplitAndExprs([]*plan.Expr{arg.E})
+	var filterList []*plan.Expr
+	if arg.exeExpr == nil {
+		filterList = colexec.SplitAndExprs([]*plan.Expr{arg.E})
+	} else {
+		filterList = colexec.SplitAndExprs([]*plan.Expr{arg.exeExpr})
+	}
 	arg.ctr.executors, err = colexec.NewExpressionExecutorsFromPlanExpressions(proc, filterList)
 	return err
 }
