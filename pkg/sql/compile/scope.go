@@ -624,9 +624,13 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 	exprs := make([]*plan.Expr, 0, len(s.DataSource.RuntimeFilterSpecs))
 	filters := make([]process.RuntimeFilterMessage, 0, len(exprs))
 
+	needExpandRanges := s.NodeInfo.NeedExpandRanges
 	if len(s.DataSource.RuntimeFilterSpecs) > 0 {
 		for _, spec := range s.DataSource.RuntimeFilterSpecs {
 			msgReceiver := c.proc.NewMessageReceiver([]int32{spec.Tag}, process.AddrBroadCastOnCurrentCN())
+			defer func() {
+				msgReceiver.Free()
+			}()
 			msgs, ctxDone := msgReceiver.ReceiveMessage(true, s.Proc.Ctx)
 			if ctxDone {
 				return nil
@@ -641,8 +645,9 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 					continue
 				case process.RuntimeFilter_DROP:
 					// FIXME: Should give an empty "Data" and then early return
-					s.NodeInfo.Data = nil
+					// s.NodeInfo.Data = nil
 					// s.NodeInfo.NeedExpandRanges = false
+					needExpandRanges = false
 					s.DataSource.FilterExpr = plan2.MakeFalseExpr()
 					return nil
 				case process.RuntimeFilter_IN:
@@ -654,7 +659,7 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 				exprs = append(exprs, spec.Expr)
 				filters = append(filters, msg)
 			}
-			msgReceiver.Free()
+			// msgReceiver.Free()
 		}
 	}
 
@@ -693,7 +698,7 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 		}
 	}
 
-	if s.NodeInfo.NeedExpandRanges {
+	if needExpandRanges {
 		scanNode := s.DataSource.node
 		if scanNode == nil {
 			panic("can not expand ranges on remote pipeline!")
@@ -1350,7 +1355,7 @@ func (s *Scope) getReaders(c *Compile,
 		}
 	}
 	// just for quick GC.
-	s.NodeInfo.Data = nil
+	// s.NodeInfo.Data = nil
 
 	// need some merge to make sure it is only scanUsedCpuNumber reader.
 	// partition table and read from memory will cause len(readers) > scanUsedCpuNumber.
