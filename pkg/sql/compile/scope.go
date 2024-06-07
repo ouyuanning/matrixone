@@ -1315,22 +1315,25 @@ func (s *Scope) getReaders(c *Compile,
 			readers = append(readers, mainRds...)
 		} else {
 			// handle the partition table.
-			blkArray := objectio.BlockInfoSlice(s.NodeInfo.Data)
+			var cleanRanges objectio.BlockInfoSlice
 			dirtyRanges := make(map[int]objectio.BlockInfoSlice)
-			cleanRanges := make(objectio.BlockInfoSlice, 0, blkArray.Len())
-			ranges := objectio.BlockInfoSlice(blkArray.Slice(1, blkArray.Len()))
-			for i := 0; i < ranges.Len(); i++ {
-				blkInfo := ranges.Get(i)
-				if !blkInfo.CanRemote {
-					if _, ok := dirtyRanges[blkInfo.PartitionNum]; !ok {
-						newRanges := make(objectio.BlockInfoSlice, 0, objectio.BlockInfoSize)
-						newRanges = append(newRanges, objectio.EmptyBlockInfoBytes...)
-						dirtyRanges[blkInfo.PartitionNum] = newRanges
+			if len(s.NodeInfo.Data) > 0 {
+				blkArray := objectio.BlockInfoSlice(s.NodeInfo.Data)
+				cleanRanges = make(objectio.BlockInfoSlice, 0, blkArray.Len())
+				ranges := objectio.BlockInfoSlice(blkArray.Slice(1, blkArray.Len()))
+				for i := 0; i < ranges.Len(); i++ {
+					blkInfo := ranges.Get(i)
+					if !blkInfo.CanRemote {
+						if _, ok := dirtyRanges[blkInfo.PartitionNum]; !ok {
+							newRanges := make(objectio.BlockInfoSlice, 0, objectio.BlockInfoSize)
+							newRanges = append(newRanges, objectio.EmptyBlockInfoBytes...)
+							dirtyRanges[blkInfo.PartitionNum] = newRanges
+						}
+						dirtyRanges[blkInfo.PartitionNum] = append(dirtyRanges[blkInfo.PartitionNum], ranges.GetBytes(i)...)
+						continue
 					}
-					dirtyRanges[blkInfo.PartitionNum] = append(dirtyRanges[blkInfo.PartitionNum], ranges.GetBytes(i)...)
-					continue
+					cleanRanges = append(cleanRanges, ranges.GetBytes(i)...)
 				}
-				cleanRanges = append(cleanRanges, ranges.GetBytes(i)...)
 			}
 
 			if len(cleanRanges) > 0 {
