@@ -459,12 +459,16 @@ func (s *Scope) ParallelRun(c *Compile) (err error) {
 func buildJoinParallelRun(s *Scope, c *Compile) (*Scope, error) {
 	mcpu := s.NodeInfo.Mcpu
 	if mcpu <= 1 { // no need to parallel
+		if s.NodeInfo.BuildJoinFinish {
+			return s, nil
+		}
 		buildScope := c.newJoinBuildScope(s, nil)
 		s.PreScopes = append(s.PreScopes, buildScope)
 		if s.BuildIdx > 1 {
 			probeScope := c.newJoinProbeScope(s, nil)
 			s.PreScopes = append(s.PreScopes, probeScope)
 		}
+		s.NodeInfo.BuildJoinFinish = true
 		return s, nil
 	}
 

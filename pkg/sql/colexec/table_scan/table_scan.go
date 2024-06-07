@@ -91,6 +91,7 @@ func (arg *Argument) Call(proc *process.Process) (vm.CallResult, error) {
 
 	if arg.buf != nil {
 		proc.PutBatch(arg.buf)
+		arg.buf = nil
 	}
 
 	for {

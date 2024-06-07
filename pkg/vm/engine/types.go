@@ -43,6 +43,7 @@ type Node struct {
 	Data   []byte `json:"payload"`
 	// Rel              Relation // local relation
 	NeedExpandRanges bool
+	BuildJoinFinish  bool
 }
 
 // Attribute is a column
