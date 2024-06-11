@@ -600,6 +600,7 @@ func buildScanParallelRun(s *Scope, c *Compile) (*Scope, error) {
 			node: s.DataSource.node,
 		}
 		readerScopes[i].Proc = process.NewWithAnalyze(s.Proc, c.ctx, 0, c.anal.Nodes())
+		readerScopes[i].TxnOffset = s.TxnOffset
 	}
 
 	mergeFromParallelScanScope, errNew := newParallelScope(c, s, readerScopes)
@@ -1070,7 +1071,7 @@ func (s *Scope) notifyAndReceiveFromRemote(wg *sync.WaitGroup, errChan chan erro
 					closeWithError(errStream, s.Proc.Reg.MergeReceivers[receiverIdx])
 					return
 				}
-				defer streamSender.Close(false)
+				defer streamSender.Close(true)
 
 				message := cnclient.AcquireMessage()
 				message.Id = streamSender.ID()
@@ -1236,7 +1237,12 @@ func (s *Scope) getReaders(c *Compile,
 			scanUsedCpuNumber = 1
 		}
 
-		readers, err = s.DataSource.Rel.NewReader(c.ctx, scanUsedCpuNumber, s.DataSource.FilterExpr, s.NodeInfo.Data, len(s.DataSource.OrderBy) > 0)
+		readers, err = s.DataSource.Rel.NewReader(c.ctx,
+			scanUsedCpuNumber,
+			s.DataSource.FilterExpr,
+			s.NodeInfo.Data,
+			len(s.DataSource.OrderBy) > 0,
+			s.TxnOffset)
 		if err != nil {
 			return
 		}
@@ -1307,8 +1313,12 @@ func (s *Scope) getReaders(c *Compile,
 		var mainRds []engine.Reader
 		var memRds []engine.Reader
 		if rel.GetEngineType() == engine.Memory || s.DataSource.PartitionRelationNames == nil {
-			mainRds, err = rel.NewReader(
-				ctx, scanUsedCpuNumber, s.DataSource.FilterExpr, s.NodeInfo.Data, len(s.DataSource.OrderBy) > 0)
+			mainRds, err = rel.NewReader(ctx,
+				scanUsedCpuNumber,
+				s.DataSource.FilterExpr,
+				s.NodeInfo.Data,
+				len(s.DataSource.OrderBy) > 0,
+				s.TxnOffset)
 			if err != nil {
 				return
 			}
@@ -1338,9 +1348,12 @@ func (s *Scope) getReaders(c *Compile,
 
 			if len(cleanRanges) > 0 {
 				// create readers for reading clean blocks from the main table.
-				mainRds, err = rel.NewReader(
-					ctx,
-					scanUsedCpuNumber, s.DataSource.FilterExpr, cleanRanges, len(s.DataSource.OrderBy) > 0)
+				mainRds, err = rel.NewReader(ctx,
+					scanUsedCpuNumber,
+					s.DataSource.FilterExpr,
+					cleanRanges,
+					len(s.DataSource.OrderBy) > 0,
+					s.TxnOffset)
 				if err != nil {
 					return
 				}
@@ -1353,7 +1366,12 @@ func (s *Scope) getReaders(c *Compile,
 				if err != nil {
 					return
 				}
-				memRds, err = subRel.NewReader(ctx, scanUsedCpuNumber, s.DataSource.FilterExpr, dirtyRanges[num], len(s.DataSource.OrderBy) > 0)
+				memRds, err = subRel.NewReader(ctx,
+					scanUsedCpuNumber,
+					s.DataSource.FilterExpr,
+					dirtyRanges[num],
+					len(s.DataSource.OrderBy) > 0,
+					s.TxnOffset)
 				if err != nil {
 					return
 				}
