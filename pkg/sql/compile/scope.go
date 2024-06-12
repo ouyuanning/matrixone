@@ -463,16 +463,12 @@ func buildJoinParallelRun(s *Scope, c *Compile) (*Scope, error) {
 	}
 	mcpu := s.NodeInfo.Mcpu
 	if mcpu <= 1 { // no need to parallel
-		if s.NodeInfo.BuildJoinFinish {
-			return s, nil
-		}
 		buildScope := c.newJoinBuildScope(s, nil)
 		s.PreScopes = append(s.PreScopes, buildScope)
 		if s.BuildIdx > 1 {
 			probeScope := c.newJoinProbeScope(s, nil)
 			s.PreScopes = append(s.PreScopes, probeScope)
 		}
-		s.NodeInfo.BuildJoinFinish = true
 		return s, nil
 	}
 
@@ -637,9 +633,9 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 	if len(s.DataSource.RuntimeFilterSpecs) > 0 {
 		for _, spec := range s.DataSource.RuntimeFilterSpecs {
 			msgReceiver := c.proc.NewMessageReceiver([]int32{spec.Tag}, process.AddrBroadCastOnCurrentCN())
-			defer func() {
-				msgReceiver.Free()
-			}()
+			// defer func() {
+			// 	msgReceiver.Free()
+			// }()
 			msgs, ctxDone := msgReceiver.ReceiveMessage(true, s.Proc.Ctx)
 			if ctxDone {
 				return nil
@@ -668,7 +664,7 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 				exprs = append(exprs, spec.Expr)
 				filters = append(filters, msg)
 			}
-			// msgReceiver.Free()
+			msgReceiver.Free()
 		}
 	}
 
