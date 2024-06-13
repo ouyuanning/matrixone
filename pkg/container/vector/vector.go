@@ -446,6 +446,10 @@ func (v *Vector) Free(mp *mpool.MPool) {
 	v.isBin = false
 
 	if !v.OnUsed || v.OnPut {
+		// fmt.Printf("free vector which unalloc or in put list %v, %v", v.OnUsed, v.OnPut)
+		fmt.Printf("%v \n", v.AllocMsg)
+		fmt.Printf("====================== \n")
+		fmt.Printf("%v \n", v.FreeMsg)
 		panic("free vector which unalloc or in put list")
 	}
 	v.OnUsed = false
