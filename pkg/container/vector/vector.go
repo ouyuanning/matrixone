@@ -450,6 +450,10 @@ func (v *Vector) Free(mp *mpool.MPool) {
 		fmt.Printf("%v \n", v.AllocMsg)
 		fmt.Printf("====================== \n")
 		fmt.Printf("%v \n", v.FreeMsg)
+		fmt.Printf("====================== \n")
+		fmt.Printf("%v \n", v.PutMsg)
+		fmt.Printf("====================== \n")
+		fmt.Printf("%v \n", v.GetMsg)
 		panic("free vector which unalloc or in put list")
 	}
 	v.OnUsed = false

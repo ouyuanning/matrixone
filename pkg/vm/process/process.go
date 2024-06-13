@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"runtime/debug"
 	"sync/atomic"
 	"time"
 
@@ -370,9 +371,21 @@ func (proc *Process) PutVector(vec *vector.Vector) {
 func (proc *Process) GetVector(typ types.Type) *vector.Vector {
 	if vec := proc.vp.getVector(typ); vec != nil {
 		if !vec.OnUsed || !vec.OnPut {
+			fmt.Printf("%v \n", vec.AllocMsg)
+			fmt.Printf("====================== \n")
+			fmt.Printf("%v \n", vec.FreeMsg)
+			fmt.Printf("====================== \n")
+			fmt.Printf("%v \n", vec.PutMsg)
+			fmt.Printf("====================== \n")
+			fmt.Printf("%v \n", vec.GetMsg)
 			panic("aaaaa")
 		}
 		vec.OnPut = false
+
+		if len(vec.PutMsg) > 20 {
+			vec.GetMsg = vec.GetMsg[1:]
+		}
+		vec.GetMsg = append(vec.GetMsg, time.Now().String()+" : typ="+vec.GetType().DescString()+" "+string(debug.Stack()))
 		vec.Reset(typ)
 		return vec
 	}
@@ -384,6 +397,7 @@ func (vp *vectorPool) freeVectors(mp *mpool.MPool) {
 	defer vp.Unlock()
 	for k, vecs := range vp.vecs {
 		for _, vec := range vecs {
+			vec.OnPut = false
 			vec.Free(mp)
 		}
 		delete(vp.vecs, k)
@@ -398,9 +412,22 @@ func (vp *vectorPool) putVector(vec *vector.Vector) bool {
 		return false
 	}
 	if !vec.OnUsed || vec.OnPut {
-		panic("aaaaa")
+		fmt.Printf("%v \n", vec.AllocMsg)
+		fmt.Printf("====================== \n")
+		fmt.Printf("%v \n", vec.FreeMsg)
+		fmt.Printf("====================== \n")
+		fmt.Printf("%v \n", vec.PutMsg)
+		fmt.Printf("====================== \n")
+		fmt.Printf("%v \n", vec.GetMsg)
+		panic("bbbbb")
 	}
 	vec.OnPut = true
+
+	if len(vec.PutMsg) > 20 {
+		vec.PutMsg = vec.PutMsg[1:]
+	}
+	vec.PutMsg = append(vec.PutMsg, time.Now().String()+" : typ="+vec.GetType().DescString()+" "+string(debug.Stack()))
+
 	vp.vecs[key] = append(vp.vecs[key], vec)
 	return true
 }

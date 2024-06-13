@@ -15,6 +15,7 @@
 package aggexec
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
@@ -303,6 +304,7 @@ func TestMultiAggFuncExec1(t *testing.T) {
 		// memory check.
 		for _, v := range inputs {
 			for _, vv := range v {
+				fmt.Printf("%p \n", vv)
 				vv.Free(mg.Mp())
 			}
 		}

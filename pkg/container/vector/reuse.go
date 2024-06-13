@@ -36,6 +36,7 @@ func init() {
 				PutMsg:   v.PutMsg,
 				GetMsg:   v.GetMsg,
 				OnUsed:   v.OnUsed,
+				OnPut:    v.OnPut,
 				nsp:      v.nsp,
 			}
 		},
