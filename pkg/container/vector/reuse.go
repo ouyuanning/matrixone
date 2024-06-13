@@ -15,6 +15,9 @@
 package vector
 
 import (
+	"runtime/debug"
+	"time"
+
 	"github.com/matrixorigin/matrixone/pkg/common/reuse"
 	"github.com/matrixorigin/matrixone/pkg/container/nulls"
 )
@@ -27,13 +30,14 @@ func init() {
 			return res
 		},
 		func(v *Vector) {
-			// *v = Vector{
-			// 	// AllocMsg: v.AllocMsg,
-			// 	// FreeMsg:  v.FreeMsg,
-			// 	// PutMsg:   v.PutMsg,
-			// 	// GetMsg:   v.GetMsg,
-			// 	// OnUsed: v.OnUsed,
-			// }
+			*v = Vector{
+				AllocMsg: v.AllocMsg,
+				FreeMsg:  v.FreeMsg,
+				PutMsg:   v.PutMsg,
+				GetMsg:   v.GetMsg,
+				OnUsed:   v.OnUsed,
+				nsp:      v.nsp,
+			}
 		},
 		reuse.DefaultOptions[Vector](),
 	)
@@ -45,13 +49,13 @@ func (v Vector) TypeName() string {
 
 func NewVecFromReuse() *Vector {
 	v := reuse.Alloc[Vector](nil)
-	// if v.OnUsed {
-	// 	panic("alloc onused vector")
-	// }
-	// if len(v.AllocMsg) > 20 {
-	// 	v.AllocMsg = v.AllocMsg[1:]
-	// }
-	// v.AllocMsg = append(v.AllocMsg, time.Now().String()+" : "+string(debug.Stack()))
-	// v.OnUsed = true
+	if v.OnUsed {
+		panic("alloc onused vector")
+	}
+	if len(v.AllocMsg) > 20 {
+		v.AllocMsg = v.AllocMsg[1:]
+	}
+	v.AllocMsg = append(v.AllocMsg, time.Now().String()+" : "+string(debug.Stack()))
+	v.OnUsed = true
 	return v
 }

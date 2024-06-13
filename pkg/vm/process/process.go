@@ -369,6 +369,10 @@ func (proc *Process) PutVector(vec *vector.Vector) {
 
 func (proc *Process) GetVector(typ types.Type) *vector.Vector {
 	if vec := proc.vp.getVector(typ); vec != nil {
+		if !vec.OnUsed || !vec.OnPut {
+			panic("aaaaa")
+		}
+		vec.OnPut = false
 		vec.Reset(typ)
 		return vec
 	}
@@ -393,6 +397,10 @@ func (vp *vectorPool) putVector(vec *vector.Vector) bool {
 	if len(vp.vecs[key]) >= vp.Limit {
 		return false
 	}
+	if !vec.OnUsed || vec.OnPut {
+		panic("aaaaa")
+	}
+	vec.OnPut = true
 	vp.vecs[key] = append(vp.vecs[key], vec)
 	return true
 }
