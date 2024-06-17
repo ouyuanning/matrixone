@@ -382,7 +382,7 @@ func (proc *Process) GetVector(typ types.Type) *vector.Vector {
 		}
 		vec.OnPut = false
 
-		if len(vec.PutMsg) > 20 {
+		if len(vec.GetMsg) > 20 {
 			vec.GetMsg = vec.GetMsg[1:]
 		}
 		vec.GetMsg = append(vec.GetMsg, time.Now().String()+" : typ="+vec.GetType().DescString()+" "+string(debug.Stack()))

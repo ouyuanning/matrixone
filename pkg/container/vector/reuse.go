@@ -15,33 +15,54 @@
 package vector
 
 import (
+	"fmt"
+	"runtime"
 	"runtime/debug"
+	"sync"
 	"time"
 
-	"github.com/matrixorigin/matrixone/pkg/common/reuse"
 	"github.com/matrixorigin/matrixone/pkg/container/nulls"
 )
 
-func init() {
-	reuse.CreatePool[Vector](
-		func() *Vector {
-			res := new(Vector)
-			res.nsp = &nulls.Nulls{}
-			return res
-		},
-		func(v *Vector) {
-			*v = Vector{
-				AllocMsg: v.AllocMsg,
-				FreeMsg:  v.FreeMsg,
-				PutMsg:   v.PutMsg,
-				GetMsg:   v.GetMsg,
-				OnUsed:   v.OnUsed,
-				OnPut:    v.OnPut,
-				nsp:      v.nsp,
+var vectorPool = &sync.Pool{
+	New: func() interface{} {
+		v := new(Vector)
+		v.nsp = &nulls.Nulls{}
+		runtime.SetFinalizer(v, func(v *Vector) {
+			if v.OnUsed {
+				panic("vector is still used")
 			}
-		},
-		reuse.DefaultOptions[Vector](),
-	)
+		})
+		return v
+	},
+}
+
+func init() {
+	// reuse.CreatePool[Vector](
+	// 	func() *Vector {
+	// 		res := new(Vector)
+	// 		res.nsp = &nulls.Nulls{}
+	// 		runtime.SetFinalizer(res, func(v *Vector) {
+	// 			if res.OnUsed {
+	// 				debug.PrintStack()
+	// 				panic("vector is still used")
+	// 			}
+	// 		})
+	// 		return res
+	// 	},
+	// 	func(v *Vector) {
+	// 		*v = Vector{
+	// 			AllocMsg: v.AllocMsg,
+	// 			FreeMsg:  v.FreeMsg,
+	// 			PutMsg:   v.PutMsg,
+	// 			GetMsg:   v.GetMsg,
+	// 			OnUsed:   v.OnUsed,
+	// 			OnPut:    v.OnPut,
+	// 			nsp:      v.nsp,
+	// 		}
+	// 	},
+	// 	reuse.DefaultOptions[Vector](),
+	// )
 }
 
 func (v Vector) TypeName() string {
@@ -49,8 +70,16 @@ func (v Vector) TypeName() string {
 }
 
 func NewVecFromReuse() *Vector {
-	v := reuse.Alloc[Vector](nil)
+	// v := reuse.Alloc[Vector](nil)
+	v := vectorPool.Get().(*Vector)
 	if v.OnUsed {
+		fmt.Printf("%v \n", v.AllocMsg)
+		fmt.Printf("====================== \n")
+		fmt.Printf("%v \n", v.FreeMsg)
+		fmt.Printf("====================== \n")
+		fmt.Printf("%v \n", v.PutMsg)
+		fmt.Printf("====================== \n")
+		fmt.Printf("%v \n", v.GetMsg)
 		panic("alloc onused vector")
 	}
 	if len(v.AllocMsg) > 20 {
