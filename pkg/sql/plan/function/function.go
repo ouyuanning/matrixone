@@ -227,7 +227,7 @@ func RunFunctionDirectly(proc *process.Process, overloadID int64, inputs []*vect
 	if fold {
 		// ToConst is a confused method. it just returns a new pointer to the same memory.
 		// so we need to duplicate it.
-		cvec, er := vec.ToConst(0, length, mp).Dup(mp)
+		cvec, er := vec.ToConstAndDup(0, length, mp)
 		result.Free()
 		if er != nil {
 			return nil, er

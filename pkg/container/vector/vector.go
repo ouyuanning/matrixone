@@ -23,6 +23,7 @@ import (
 
 	"github.com/matrixorigin/matrixone/pkg/common/moerr"
 	"github.com/matrixorigin/matrixone/pkg/common/mpool"
+	"github.com/matrixorigin/matrixone/pkg/common/reuse"
 	"github.com/matrixorigin/matrixone/pkg/container/nulls"
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	"github.com/matrixorigin/matrixone/pkg/vectorize/moarray"
@@ -61,6 +62,10 @@ type Vector struct {
 
 	// FIXME: Bad design! Will be deleted soon.
 	isBin bool
+
+	// OnUsed   bool
+	// AllocMsg []string
+	// FreeMsg  []string
 }
 
 type typedSlice struct {
@@ -438,14 +443,15 @@ func (v *Vector) Free(mp *mpool.MPool) {
 	// if !v.OnUsed || v.OnPut {
 	// 	panic("free vector which unalloc or in put list")
 	// }
-	// v.OnUsed = false
 	// v.OnPut = false
+	// v.OnUsed = false
 	// if len(v.FreeMsg) > 20 {
 	// 	v.FreeMsg = v.FreeMsg[1:]
 	// }
 	// v.FreeMsg = append(v.FreeMsg, time.Now().String()+" : typ="+v.typ.DescString()+" "+string(debug.Stack()))
+	// vectorPool.Put(v)
 
-	//reuse.Free[Vector](v, nil)
+	reuse.Free[Vector](v, nil)
 }
 
 func (v *Vector) MarshalBinary() ([]byte, error) {
@@ -612,6 +618,12 @@ func (v *Vector) UnmarshalBinaryWithCopy(data []byte, mp *mpool.MPool) error {
 	//data = data[1:]
 
 	return nil
+}
+
+func (v *Vector) ToConstAndDup(row, length int, mp *mpool.MPool) (*Vector, error) {
+	tmpVec := v.ToConst(row, length, mp)
+	defer tmpVec.Free(mp)
+	return tmpVec.Dup(mp)
 }
 
 func (v *Vector) ToConst(row, length int, mp *mpool.MPool) *Vector {
