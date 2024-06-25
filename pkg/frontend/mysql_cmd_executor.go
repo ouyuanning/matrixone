@@ -1090,10 +1090,10 @@ func createPrepareStmt(
 		}
 
 		// @xxx when refactor prepare finish, remove this code
-		if comp != nil {
-			comp.Release()
-			comp = nil
-		}
+		// if comp != nil {
+		// 	comp.Release()
+		// 	comp = nil
+		// }
 	}
 
 	prepareStmt := &PrepareStmt{
