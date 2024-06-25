@@ -1052,7 +1052,7 @@ func (c *Compile) compileQuery(ctx context.Context, qry *plan.Query) ([]*Scope, 
 		sort.Slice(c.cnList, func(i, j int) bool { return c.cnList[i].Addr < c.cnList[j].Addr })
 	}
 
-	if c.isPrepare && c.IsTpQuery() {
+	if c.isPrepare && !c.IsTpQuery() {
 		return nil, cantCompileForPrepareErr
 	}
 

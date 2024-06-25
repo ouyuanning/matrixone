@@ -163,7 +163,7 @@ func (s *Scope) initDataSource(c *Compile) (err error) {
 			}
 		}
 	} else {
-		if s.DataSource.TableDef != nil {
+		if s.DataSource.Rel != nil {
 			return nil
 		}
 		return c.compileTableScanDataSource(s)
