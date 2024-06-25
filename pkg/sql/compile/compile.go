@@ -152,6 +152,9 @@ func (c *Compile) Release() {
 	if c == nil {
 		return
 	}
+	if c.isPrepare {
+		return
+	}
 	reuse.Free[Compile](c, nil)
 }
 
@@ -4055,7 +4058,7 @@ func (c *Compile) expandRanges(n *plan.Node, rel engine.Relation, blockFilterLis
 				if err != nil {
 					return nil, err
 				}
-				subranges, err := subrelation.Ranges(ctx, n.BlockFilterList, c.TxnOffset)
+				subranges, err := subrelation.Ranges(ctx, plan2.DeepCopyExprList(blockFilterList), c.TxnOffset)
 				if err != nil {
 					return nil, err
 				}
@@ -4077,7 +4080,7 @@ func (c *Compile) expandRanges(n *plan.Node, rel engine.Relation, blockFilterLis
 				if err != nil {
 					return nil, err
 				}
-				subranges, err := subrelation.Ranges(ctx, n.BlockFilterList, c.TxnOffset)
+				subranges, err := subrelation.Ranges(ctx, plan2.DeepCopyExprList(blockFilterList), c.TxnOffset)
 				if err != nil {
 					return nil, err
 				}
