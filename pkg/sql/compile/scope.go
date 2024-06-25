@@ -516,213 +516,14 @@ func buildScanParallelRun(s *Scope, c *Compile) (*Scope, error) {
 		return nil, moerr.NewInternalError(c.ctx, "ordered scan cannot run in remote.")
 	}
 
-	// receive runtime filter and optimized the datasource.
-	if err := s.handleRuntimeFilter(c); err != nil {
-		return nil, err
-	}
-
 	maxProvidedCpuNumber := goruntime.GOMAXPROCS(0)
 	if c.IsTpQuery() {
 		maxProvidedCpuNumber = 1
 	}
 
-	var scanUsedCpuNumber int
-	var readers []engine.Reader
-	var err error
-
-	switch {
-
-	// If this was a remote-run pipeline. Reader should be generated from Engine.
-	case s.IsRemote:
-		// this cannot use c.ctx directly, please refer to `default case`.
-		ctx := c.ctx
-		if util.TableIsClusterTable(s.DataSource.TableDef.GetTableType()) {
-			ctx = defines.AttachAccountId(ctx, catalog.System_Account)
-		}
-		if s.DataSource.AccountId != nil {
-			ctx = defines.AttachAccountId(ctx, uint32(s.DataSource.AccountId.GetTenantId()))
-		}
-
-		// determined how many cpus we should use.
-		blkSlice := objectio.BlockInfoSlice(s.NodeInfo.Data)
-		scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, blkSlice.Len())
-
-		readers, err = c.e.NewBlockReader(
-			ctx, scanUsedCpuNumber,
-			s.DataSource.Timestamp, s.DataSource.FilterExpr, nil, s.NodeInfo.Data, s.DataSource.TableDef, c.proc)
-		if err != nil {
-			return nil, err
-		}
-
-	// Reader can be generated from local relation.
-	case s.DataSource.Rel != nil && s.DataSource.TableDef.Partition == nil:
-		switch s.DataSource.Rel.GetEngineType() {
-		case engine.Disttae:
-			blkSlice := objectio.BlockInfoSlice(s.NodeInfo.Data)
-			scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, blkSlice.Len())
-		case engine.Memory:
-			idSlice := memoryengine.ShardIdSlice(s.NodeInfo.Data)
-			scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, idSlice.Len())
-		default:
-			scanUsedCpuNumber = 1
-		}
-		if len(s.DataSource.OrderBy) > 0 {
-			scanUsedCpuNumber = 1
-		}
-
-		readers, err = s.DataSource.Rel.NewReader(c.ctx,
-			scanUsedCpuNumber,
-			s.DataSource.FilterExpr,
-			s.NodeInfo.Data,
-			len(s.DataSource.OrderBy) > 0,
-			s.TxnOffset)
-		if err != nil {
-			return nil, err
-		}
-
-	// Should get relation first to generate Reader.
-	// FIXME:: s.NodeInfo.Rel == nil, partition table? -- this is an old comment, I just do a copy here.
-	default:
-		// This cannot modify the c.ctx here, but I don't know why.
-		// Maybe there are some account related things stores in the context (using the context.WithValue),
-		// and modify action will change the account.
-		ctx := c.ctx
-
-		if util.TableIsClusterTable(s.DataSource.TableDef.GetTableType()) {
-			ctx = defines.AttachAccountId(ctx, catalog.System_Account)
-		}
-
-		var db engine.Database
-		var rel engine.Relation
-		// todo:
-		//  these following codes were very likely to `compile.go:compileTableScanDataSource `.
-		//  I kept the old codes here without any modify. I don't know if there is one `GetRelation(txn, scanNode, scheme, table)`
-		{
-			n := s.DataSource.node
-			txnOp := s.Proc.TxnOperator
-			if n.ScanSnapshot != nil && n.ScanSnapshot.TS != nil {
-				if !n.ScanSnapshot.TS.Equal(timestamp.Timestamp{LogicalTime: 0, PhysicalTime: 0}) &&
-					n.ScanSnapshot.TS.Less(c.proc.TxnOperator.Txn().SnapshotTS) {
-					if c.proc.GetCloneTxnOperator() != nil {
-						txnOp = c.proc.GetCloneTxnOperator()
-					} else {
-						txnOp = c.proc.TxnOperator.CloneSnapshotOp(*n.ScanSnapshot.TS)
-						c.proc.SetCloneTxnOperator(txnOp)
-					}
-
-					if n.ScanSnapshot.Tenant != nil {
-						ctx = context.WithValue(ctx, defines.TenantIDKey{}, n.ScanSnapshot.Tenant.TenantID)
-					}
-				}
-			}
-
-			db, err = c.e.Database(ctx, s.DataSource.SchemaName, txnOp)
-			if err != nil {
-				return nil, err
-			}
-			rel, err = db.Relation(ctx, s.DataSource.RelationName, c.proc)
-			if err != nil {
-				var e error // avoid contamination of error messages
-				db, e = c.e.Database(ctx, defines.TEMPORARY_DBNAME, s.Proc.TxnOperator)
-				if e != nil {
-					return nil, e
-				}
-				rel, e = db.Relation(ctx, engine.GetTempTableName(s.DataSource.SchemaName, s.DataSource.RelationName), c.proc)
-				if e != nil {
-					return nil, err
-				}
-			}
-		}
-
-		switch rel.GetEngineType() {
-		case engine.Disttae:
-			blkSlice := objectio.BlockInfoSlice(s.NodeInfo.Data)
-			scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, blkSlice.Len())
-		case engine.Memory:
-			idSlice := memoryengine.ShardIdSlice(s.NodeInfo.Data)
-			scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, idSlice.Len())
-		default:
-			scanUsedCpuNumber = 1
-		}
-		if len(s.DataSource.OrderBy) > 0 {
-			scanUsedCpuNumber = 1
-		}
-
-		if rel.GetEngineType() == engine.Memory || s.DataSource.PartitionRelationNames == nil {
-			mainRds, err1 := rel.NewReader(ctx,
-				scanUsedCpuNumber,
-				s.DataSource.FilterExpr,
-				s.NodeInfo.Data,
-				len(s.DataSource.OrderBy) > 0,
-				s.TxnOffset)
-			if err1 != nil {
-				return nil, err1
-			}
-			readers = append(readers, mainRds...)
-		} else {
-			// handle the partition table.
-			blkArray := objectio.BlockInfoSlice(s.NodeInfo.Data)
-			dirtyRanges := make(map[int]objectio.BlockInfoSlice)
-			cleanRanges := make(objectio.BlockInfoSlice, 0, blkArray.Len())
-			ranges := objectio.BlockInfoSlice(blkArray.Slice(1, blkArray.Len()))
-			for i := 0; i < ranges.Len(); i++ {
-				blkInfo := ranges.Get(i)
-				if !blkInfo.CanRemote {
-					if _, ok := dirtyRanges[blkInfo.PartitionNum]; !ok {
-						newRanges := make(objectio.BlockInfoSlice, 0, objectio.BlockInfoSize)
-						newRanges = append(newRanges, objectio.EmptyBlockInfoBytes...)
-						dirtyRanges[blkInfo.PartitionNum] = newRanges
-					}
-					dirtyRanges[blkInfo.PartitionNum] = append(dirtyRanges[blkInfo.PartitionNum], ranges.GetBytes(i)...)
-					continue
-				}
-				cleanRanges = append(cleanRanges, ranges.GetBytes(i)...)
-			}
-
-			if len(cleanRanges) > 0 {
-				// create readers for reading clean blocks from the main table.
-				mainRds, err1 := rel.NewReader(ctx,
-					scanUsedCpuNumber,
-					s.DataSource.FilterExpr,
-					cleanRanges,
-					len(s.DataSource.OrderBy) > 0,
-					s.TxnOffset)
-				if err1 != nil {
-					return nil, err1
-				}
-				readers = append(readers, mainRds...)
-			}
-			// create readers for reading dirty blocks from partition table.
-			for num, relName := range s.DataSource.PartitionRelationNames {
-				subRel, err1 := db.Relation(ctx, relName, c.proc)
-				if err1 != nil {
-					return nil, err1
-				}
-				memRds, err2 := subRel.NewReader(ctx,
-					scanUsedCpuNumber,
-					s.DataSource.FilterExpr,
-					dirtyRanges[num],
-					len(s.DataSource.OrderBy) > 0,
-					s.TxnOffset)
-				if err2 != nil {
-					return nil, err2
-				}
-				readers = append(readers, memRds...)
-			}
-		}
-	}
-	// just for quick GC.
-	s.NodeInfo.Data = nil
-
-	// need some merge to make sure it is only scanUsedCpuNumber reader.
-	// partition table and read from memory will cause len(readers) > scanUsedCpuNumber.
-	if len(readers) != scanUsedCpuNumber {
-		newReaders := make([]engine.Reader, 0, scanUsedCpuNumber)
-		step := len(readers) / scanUsedCpuNumber
-		for i := 0; i < len(readers); i += step {
-			newReaders = append(newReaders, disttae.NewMergeReader(readers[i:i+step]))
-		}
-		readers = newReaders
+	readers, scanUsedCpuNumber, err := s.getReaders(c, maxProvidedCpuNumber)
+	if err != nil {
+		return nil, err
 	}
 
 	// only one scan reader, it can just run without any merge.
@@ -748,6 +549,8 @@ func buildScanParallelRun(s *Scope, c *Compile) (*Scope, error) {
 			RelationName: s.DataSource.RelationName,
 			Attributes:   s.DataSource.Attributes,
 			AccountId:    s.DataSource.AccountId,
+
+			node: s.DataSource.node,
 		}
 		readerScopes[i].Proc = process.NewFromProc(s.Proc, c.ctx, 0)
 		readerScopes[i].TxnOffset = s.TxnOffset
@@ -779,6 +582,7 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 	exprs := make([]*plan.Expr, 0, len(s.DataSource.RuntimeFilterSpecs))
 	filters := make([]process.RuntimeFilterMessage, 0, len(exprs))
 
+	needExpandRanges := s.NodeInfo.NeedExpandRanges
 	if len(s.DataSource.RuntimeFilterSpecs) > 0 {
 		for _, spec := range s.DataSource.RuntimeFilterSpecs {
 			msgReceiver := c.proc.NewMessageReceiver([]int32{spec.Tag}, process.AddrBroadCastOnCurrentCN())
@@ -796,9 +600,10 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 					continue
 				case process.RuntimeFilter_DROP:
 					// FIXME: Should give an empty "Data" and then early return
-					s.NodeInfo.Data = nil
-					s.NodeInfo.NeedExpandRanges = false
-					s.DataSource.FilterExpr = plan2.MakeFalseExpr()
+					// s.NodeInfo.Data = nil
+					// s.NodeInfo.NeedExpandRanges = false
+					// s.DataSource.FilterExpr = plan2.MakeFalseExpr()
+					needExpandRanges = false
 					return nil
 				case process.RuntimeFilter_IN:
 					inExpr := plan2.MakeInExpr(c.ctx, spec.Expr, msg.Card, msg.Data, spec.MatchPrefix)
@@ -848,7 +653,7 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 		}
 	}
 
-	if s.NodeInfo.NeedExpandRanges {
+	if needExpandRanges {
 		scanNode := s.DataSource.node
 		if scanNode == nil {
 			panic("can not expand ranges on remote pipeline!")
@@ -864,7 +669,6 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 			return err
 		}
 		s.NodeInfo.Data = append(s.NodeInfo.Data, ranges.GetAllBytes()...)
-		s.NodeInfo.NeedExpandRanges = false
 
 	} else if len(inExprList) > 0 {
 		s.NodeInfo.Data, err = ApplyRuntimeFilters(c.ctx, s.Proc, s.DataSource.TableDef, s.NodeInfo.Data, exprs, filters)
@@ -1341,6 +1145,217 @@ func (s *Scope) replace(c *Compile) error {
 	}
 	c.addAffectedRows(result.AffectedRows + delAffectedRows)
 	return nil
+}
+
+func (s *Scope) getReaders(c *Compile, maxProvidedCpuNumber int) (readers []engine.Reader, scanUsedCpuNumber int, err error) {
+	// receive runtime filter and optimized the datasource.
+	if err = s.handleRuntimeFilter(c); err != nil {
+		return
+	}
+
+	switch {
+
+	// If this was a remote-run pipeline. Reader should be generated from Engine.
+	case s.IsRemote:
+		// this cannot use c.ctx directly, please refer to `default case`.
+		ctx := c.ctx
+		if util.TableIsClusterTable(s.DataSource.TableDef.GetTableType()) {
+			ctx = defines.AttachAccountId(ctx, catalog.System_Account)
+		}
+		if s.DataSource.AccountId != nil {
+			ctx = defines.AttachAccountId(ctx, uint32(s.DataSource.AccountId.GetTenantId()))
+		}
+
+		// determined how many cpus we should use.
+		blkSlice := objectio.BlockInfoSlice(s.NodeInfo.Data)
+		scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, blkSlice.Len())
+
+		readers, err = c.e.NewBlockReader(
+			ctx, scanUsedCpuNumber,
+			s.DataSource.Timestamp, s.DataSource.FilterExpr, nil, s.NodeInfo.Data, s.DataSource.TableDef, c.proc)
+		if err != nil {
+			return
+		}
+
+	// Reader can be generated from local relation.
+	case s.DataSource.Rel != nil && s.DataSource.TableDef.Partition == nil:
+		switch s.DataSource.Rel.GetEngineType() {
+		case engine.Disttae:
+			blkSlice := objectio.BlockInfoSlice(s.NodeInfo.Data)
+			scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, blkSlice.Len())
+		case engine.Memory:
+			idSlice := memoryengine.ShardIdSlice(s.NodeInfo.Data)
+			scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, idSlice.Len())
+		default:
+			scanUsedCpuNumber = 1
+		}
+		if len(s.DataSource.OrderBy) > 0 {
+			scanUsedCpuNumber = 1
+		}
+
+		readers, err = s.DataSource.Rel.NewReader(c.ctx,
+			scanUsedCpuNumber,
+			s.DataSource.FilterExpr,
+			s.NodeInfo.Data,
+			len(s.DataSource.OrderBy) > 0,
+			s.TxnOffset)
+		if err != nil {
+			return
+		}
+
+	// Should get relation first to generate Reader.
+	// FIXME:: s.NodeInfo.Rel == nil, partition table? -- this is an old comment, I just do a copy here.
+	default:
+		// This cannot modify the c.ctx here, but I don't know why.
+		// Maybe there are some account related things stores in the context (using the context.WithValue),
+		// and modify action will change the account.
+		ctx := c.ctx
+
+		if util.TableIsClusterTable(s.DataSource.TableDef.GetTableType()) {
+			ctx = defines.AttachAccountId(ctx, catalog.System_Account)
+		}
+
+		var db engine.Database
+		var rel engine.Relation
+		// todo:
+		//  these following codes were very likely to `compile.go:compileTableScanDataSource `.
+		//  I kept the old codes here without any modify. I don't know if there is one `GetRelation(txn, scanNode, scheme, table)`
+		{
+			n := s.DataSource.node
+			txnOp := s.Proc.TxnOperator
+			if n.ScanSnapshot != nil && n.ScanSnapshot.TS != nil {
+				if !n.ScanSnapshot.TS.Equal(timestamp.Timestamp{LogicalTime: 0, PhysicalTime: 0}) &&
+					n.ScanSnapshot.TS.Less(c.proc.TxnOperator.Txn().SnapshotTS) {
+					if c.proc.GetCloneTxnOperator() != nil {
+						txnOp = c.proc.GetCloneTxnOperator()
+					} else {
+						txnOp = c.proc.TxnOperator.CloneSnapshotOp(*n.ScanSnapshot.TS)
+						c.proc.SetCloneTxnOperator(txnOp)
+					}
+
+					if n.ScanSnapshot.Tenant != nil {
+						ctx = context.WithValue(ctx, defines.TenantIDKey{}, n.ScanSnapshot.Tenant.TenantID)
+					}
+				}
+			}
+
+			db, err = c.e.Database(ctx, s.DataSource.SchemaName, txnOp)
+			if err != nil {
+				return
+			}
+			rel, err = db.Relation(ctx, s.DataSource.RelationName, c.proc)
+			if err != nil {
+				var e error // avoid contamination of error messages
+				db, e = c.e.Database(ctx, defines.TEMPORARY_DBNAME, s.Proc.TxnOperator)
+				if e != nil {
+					err = e
+					return
+				}
+				rel, e = db.Relation(ctx, engine.GetTempTableName(s.DataSource.SchemaName, s.DataSource.RelationName), c.proc)
+				if e != nil {
+					err = e
+					return
+				}
+			}
+		}
+
+		switch rel.GetEngineType() {
+		case engine.Disttae:
+			blkSlice := objectio.BlockInfoSlice(s.NodeInfo.Data)
+			scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, blkSlice.Len())
+		case engine.Memory:
+			idSlice := memoryengine.ShardIdSlice(s.NodeInfo.Data)
+			scanUsedCpuNumber = DetermineRuntimeDOP(maxProvidedCpuNumber, idSlice.Len())
+		default:
+			scanUsedCpuNumber = 1
+		}
+		if len(s.DataSource.OrderBy) > 0 {
+			scanUsedCpuNumber = 1
+		}
+
+		var mainRds []engine.Reader
+		var memRds []engine.Reader
+		if rel.GetEngineType() == engine.Memory || s.DataSource.PartitionRelationNames == nil {
+			mainRds, err = rel.NewReader(ctx,
+				scanUsedCpuNumber,
+				s.DataSource.FilterExpr,
+				s.NodeInfo.Data,
+				len(s.DataSource.OrderBy) > 0,
+				s.TxnOffset)
+			if err != nil {
+				return
+			}
+			readers = append(readers, mainRds...)
+		} else {
+			// handle the partition table.
+			var cleanRanges objectio.BlockInfoSlice
+			dirtyRanges := make(map[int]objectio.BlockInfoSlice)
+
+			if len(s.NodeInfo.Data) > 0 {
+				blkArray := objectio.BlockInfoSlice(s.NodeInfo.Data)
+				cleanRanges = make(objectio.BlockInfoSlice, 0, blkArray.Len())
+				ranges := objectio.BlockInfoSlice(blkArray.Slice(1, blkArray.Len()))
+				for i := 0; i < ranges.Len(); i++ {
+					blkInfo := ranges.Get(i)
+					if !blkInfo.CanRemote {
+						if _, ok := dirtyRanges[blkInfo.PartitionNum]; !ok {
+							newRanges := make(objectio.BlockInfoSlice, 0, objectio.BlockInfoSize)
+							newRanges = append(newRanges, objectio.EmptyBlockInfoBytes...)
+							dirtyRanges[blkInfo.PartitionNum] = newRanges
+						}
+						dirtyRanges[blkInfo.PartitionNum] = append(dirtyRanges[blkInfo.PartitionNum], ranges.GetBytes(i)...)
+						continue
+					}
+					cleanRanges = append(cleanRanges, ranges.GetBytes(i)...)
+				}
+			}
+
+			if len(cleanRanges) > 0 {
+				// create readers for reading clean blocks from the main table.
+				mainRds, err = rel.NewReader(ctx,
+					scanUsedCpuNumber,
+					s.DataSource.FilterExpr,
+					cleanRanges,
+					len(s.DataSource.OrderBy) > 0,
+					s.TxnOffset)
+				if err != nil {
+					return
+				}
+				readers = append(readers, mainRds...)
+			}
+			// create readers for reading dirty blocks from partition table.
+			var subRel engine.Relation
+			for num, relName := range s.DataSource.PartitionRelationNames {
+				subRel, err = db.Relation(ctx, relName, c.proc)
+				if err != nil {
+					return
+				}
+				memRds, err = subRel.NewReader(ctx,
+					scanUsedCpuNumber,
+					s.DataSource.FilterExpr,
+					dirtyRanges[num],
+					len(s.DataSource.OrderBy) > 0,
+					s.TxnOffset)
+				if err != nil {
+					return
+				}
+				readers = append(readers, memRds...)
+			}
+		}
+	}
+
+	// need some merge to make sure it is only scanUsedCpuNumber reader.
+	// partition table and read from memory will cause len(readers) > scanUsedCpuNumber.
+	if len(readers) != scanUsedCpuNumber {
+		newReaders := make([]engine.Reader, 0, scanUsedCpuNumber)
+		step := len(readers) / scanUsedCpuNumber
+		for i := 0; i < len(readers); i += step {
+			newReaders = append(newReaders, disttae.NewMergeReader(readers[i:i+step]))
+		}
+		readers = newReaders
+	}
+
+	return
 }
 
 func (s Scope) TypeName() string {

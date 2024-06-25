@@ -202,6 +202,9 @@ func (c *Compile) Reset(proc *process.Process, startAt time.Time, fill func(*bat
 	c.startAt = startAt
 	if c.proc.TxnOperator != nil {
 		c.proc.TxnOperator.GetWorkspace().UpdateSnapshotWriteOffset()
+		c.TxnOffset = c.proc.TxnOperator.GetWorkspace().GetSnapshotWriteOffset()
+	} else {
+		c.TxnOffset = 0
 	}
 }
 
