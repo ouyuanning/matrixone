@@ -129,19 +129,19 @@ func NewCompile(
 	c.uid = uid
 	c.sql = sql
 	c.proc = proc
-	c.proc.MessageBoard = c.MessageBoard
+	c.proc.Base.MessageBoard = c.MessageBoard
 	c.stmt = stmt
 	c.addr = addr
 	c.isInternal = isInternal
 	c.cnLabel = cnLabel
 	c.startAt = startAt
 	c.disableRetry = false
-	if c.proc.TxnOperator != nil {
+	if c.proc.GetTxnOperator() != nil {
 		// TODO: The action of updating the WriteOffset logic should be executed in the `func (c *Compile) Run(_ uint64)` method.
 		// However, considering that the delay ranges are not completed yet, the UpdateSnapshotWriteOffset() and
 		// the assignment of `Compile.TxnOffset` should be moved into the `func (c *Compile) Run(_ uint64)` method in the later stage.
-		c.proc.TxnOperator.GetWorkspace().UpdateSnapshotWriteOffset()
-		c.TxnOffset = c.proc.TxnOperator.GetWorkspace().GetSnapshotWriteOffset()
+		c.proc.GetTxnOperator().GetWorkspace().UpdateSnapshotWriteOffset()
+		c.TxnOffset = c.proc.GetTxnOperator().GetWorkspace().GetSnapshotWriteOffset()
 	} else {
 		c.TxnOffset = 0
 	}
@@ -200,9 +200,9 @@ func (c *Compile) Reset(proc *process.Process, startAt time.Time, fill func(*bat
 		f.reset()
 	}
 	c.startAt = startAt
-	if c.proc.TxnOperator != nil {
-		c.proc.TxnOperator.GetWorkspace().UpdateSnapshotWriteOffset()
-		c.TxnOffset = c.proc.TxnOperator.GetWorkspace().GetSnapshotWriteOffset()
+	if c.proc.GetTxnOperator() != nil {
+		c.proc.GetTxnOperator().GetWorkspace().UpdateSnapshotWriteOffset()
+		c.TxnOffset = c.proc.GetTxnOperator().GetWorkspace().GetSnapshotWriteOffset()
 	} else {
 		c.TxnOffset = 0
 	}
@@ -303,8 +303,8 @@ func (c *Compile) Compile(ctx context.Context, pn *plan.Plan, fill func(*batch.B
 		}
 	}()
 
-	if c.proc.TxnOperator != nil && c.proc.TxnOperator.Txn().IsPessimistic() {
-		txnOp := c.proc.TxnOperator
+	if c.proc.GetTxnOperator() != nil && c.proc.GetTxnOperator().Txn().IsPessimistic() {
+		txnOp := c.proc.GetTxnOperator()
 		seq := txnOp.NextSequence()
 		txnTrace.GetService().AddTxnDurationAction(
 			txnOp,
@@ -483,7 +483,7 @@ func (c *Compile) Run(_ uint64) (result *util2.RunResult, err error) {
 		sql = c.sql
 	}
 
-	txnOp := c.proc.TxnOperator
+	txnOp := c.proc.GetTxnOperator()
 	seq := uint64(0)
 	if txnOp != nil {
 		seq = txnOp.NextSequence()
@@ -531,8 +531,8 @@ func (c *Compile) Run(_ uint64) (result *util2.RunResult, err error) {
 		s.SetOperatorInfoRecursively(c.allocOperatorID)
 	}
 
-	if c.proc.TxnOperator != nil {
-		writeOffset = uint64(c.proc.TxnOperator.GetWorkspace().GetSnapshotWriteOffset())
+	if c.proc.GetTxnOperator() != nil {
+		writeOffset = uint64(c.proc.GetTxnOperator().GetWorkspace().GetSnapshotWriteOffset())
 	}
 	result = &util2.RunResult{}
 	var span trace.Span
@@ -556,9 +556,9 @@ func (c *Compile) Run(_ uint64) (result *util2.RunResult, err error) {
 		span.End(trace.WithStatementExtra(sp.GetTxnId(), sp.GetStmtId(), sp.GetSqlOfStmt()))
 	}()
 
-	if c.proc.TxnOperator != nil {
-		c.proc.TxnOperator.GetWorkspace().IncrSQLCount()
-		c.proc.TxnOperator.ResetRetry(false)
+	if c.proc.GetTxnOperator() != nil {
+		c.proc.GetTxnOperator().GetWorkspace().IncrSQLCount()
+		c.proc.GetTxnOperator().ResetRetry(false)
 	}
 
 	v2.TxnStatementTotalCounter.Inc()
@@ -570,21 +570,21 @@ func (c *Compile) Run(_ uint64) (result *util2.RunResult, err error) {
 
 		c.fatalLog(retryTimes, err)
 		if !c.canRetry(err) {
-			if c.proc.TxnOperator.Txn().IsRCIsolation() &&
+			if c.proc.GetTxnOperator().Txn().IsRCIsolation() &&
 				moerr.IsMoErrCode(err, moerr.ErrDuplicateEntry) {
-				orphan, e := c.proc.LockService.IsOrphanTxn(
+				orphan, e := c.proc.Base.LockService.IsOrphanTxn(
 					c.proc.Ctx,
-					c.proc.TxnOperator.Txn().ID,
+					c.proc.GetTxnOperator().Txn().ID,
 				)
 				if e != nil {
 					getLogger().Error("failed to convert dup to orphan txn error",
-						zap.String("txn", hex.EncodeToString(c.proc.TxnOperator.Txn().ID)),
+						zap.String("txn", hex.EncodeToString(c.proc.GetTxnOperator().Txn().ID)),
 						zap.Error(err),
 					)
 				}
 				if e == nil && orphan {
 					getLogger().Warn("convert dup to orphan txn error",
-						zap.String("txn", hex.EncodeToString(c.proc.TxnOperator.Txn().ID)),
+						zap.String("txn", hex.EncodeToString(c.proc.GetTxnOperator().Txn().ID)),
 					)
 					err = moerr.NewCannotCommitOrphan(c.proc.Ctx)
 				}
@@ -607,24 +607,24 @@ func (c *Compile) Run(_ uint64) (result *util2.RunResult, err error) {
 	}
 	result.AffectRows = runC.getAffectedRows()
 
-	if c.proc.TxnOperator != nil {
-		return result, c.proc.TxnOperator.GetWorkspace().Adjust(writeOffset)
+	if c.proc.GetTxnOperator() != nil {
+		return result, c.proc.GetTxnOperator().GetWorkspace().Adjust(writeOffset)
 	}
 	return result, nil
 }
 
 func (c *Compile) prepareRetry(defChanged bool) (*Compile, error) {
 	v2.TxnStatementRetryCounter.Inc()
-	c.proc.TxnOperator.ResetRetry(true)
-	c.proc.TxnOperator.GetWorkspace().IncrSQLCount()
+	c.proc.GetTxnOperator().ResetRetry(true)
+	c.proc.GetTxnOperator().GetWorkspace().IncrSQLCount()
 
 	// clear the workspace of the failed statement
-	if e := c.proc.TxnOperator.GetWorkspace().RollbackLastStatement(c.ctx); e != nil {
+	if e := c.proc.GetTxnOperator().GetWorkspace().RollbackLastStatement(c.ctx); e != nil {
 		return nil, e
 	}
 
 	// increase the statement id
-	if e := c.proc.TxnOperator.GetWorkspace().IncrStatementID(c.ctx, false); e != nil {
+	if e := c.proc.GetTxnOperator().GetWorkspace().IncrStatementID(c.ctx, false); e != nil {
 		return nil, e
 	}
 
@@ -658,7 +658,7 @@ func (c *Compile) prepareRetry(defChanged bool) (*Compile, error) {
 func (c *Compile) isRetryErr(err error) bool {
 	return (moerr.IsMoErrCode(err, moerr.ErrTxnNeedRetry) ||
 		moerr.IsMoErrCode(err, moerr.ErrTxnNeedRetryWithDefChanged)) &&
-		c.proc.TxnOperator.Txn().IsRCIsolation()
+		c.proc.GetTxnOperator().Txn().IsRCIsolation()
 }
 
 func (c *Compile) canRetry(err error) bool {
@@ -1015,10 +1015,10 @@ func (c *Compile) getCNList() (engine.Nodes, error) {
 	}
 
 	// We should always make sure the current CN is contained in the cn list.
-	if c.proc == nil || c.proc.QueryClient == nil {
+	if c.proc == nil || c.proc.Base.QueryClient == nil {
 		return cnList, nil
 	}
-	cnID := c.proc.QueryClient.ServiceID()
+	cnID := c.proc.Base.QueryClient.ServiceID()
 	for _, node := range cnList {
 		if node.Id == cnID {
 			return cnList, nil
@@ -1710,7 +1710,7 @@ func (c *Compile) compilePlanScope(ctx context.Context, step int32, curNodeIdx i
 
 		block := false
 		// only pessimistic txn needs to block downstream operators.
-		if c.proc.TxnOperator.Txn().IsPessimistic() {
+		if c.proc.GetTxnOperator().Txn().IsPessimistic() {
 			block = n.LockTargets[0].Block
 			if block {
 				ss = []*Scope{c.newMergeScope(ss)}
@@ -1859,8 +1859,8 @@ func (c *Compile) constructScopeForExternal(addr string, parallel bool) *Scope {
 	ds.NodeInfo = getEngineNode(c)
 	ds.NodeInfo.Addr = addr
 	ds.Proc = process.NewFromProc(c.proc, c.ctx, 0)
-	c.proc.LoadTag = c.anal.qry.LoadTag
-	ds.Proc.LoadTag = true
+	c.proc.Base.LoadTag = c.anal.qry.LoadTag
+	ds.Proc.Base.LoadTag = true
 	ds.DataSource = &Source{isConst: true}
 	return ds
 }
@@ -1868,7 +1868,7 @@ func (c *Compile) constructScopeForExternal(addr string, parallel bool) *Scope {
 func (c *Compile) constructLoadMergeScope() *Scope {
 	ds := newScope(Merge)
 	ds.Proc = process.NewFromProc(c.proc, c.ctx, 1)
-	ds.Proc.LoadTag = true
+	ds.Proc.Base.LoadTag = true
 	ds.appendInstruction(vm.Instruction{
 		Op:      vm.Merge,
 		Idx:     c.anal.curr,
@@ -2012,7 +2012,7 @@ func (c *Compile) compileExternScan(ctx context.Context, n *plan.Node) ([]*Scope
 	}
 
 	t = time.Now()
-	param.FileService = c.proc.FileService
+	param.FileService = c.proc.Base.FileService
 	param.Ctx = c.ctx
 	var err error
 	var fileList []string
@@ -2300,18 +2300,18 @@ func (c *Compile) compileTableScanDataSource(s *Scope) error {
 
 	//-----------------------------------------------------------------------------------------------------
 	ctx := c.ctx
-	txnOp = c.proc.TxnOperator
+	txnOp = c.proc.GetTxnOperator()
 	err = disttae.CheckTxnIsValid(txnOp)
 	if err != nil {
 		return err
 	}
 	if n.ScanSnapshot != nil && n.ScanSnapshot.TS != nil {
 		if !n.ScanSnapshot.TS.Equal(timestamp.Timestamp{LogicalTime: 0, PhysicalTime: 0}) &&
-			n.ScanSnapshot.TS.Less(c.proc.TxnOperator.Txn().SnapshotTS) {
+			n.ScanSnapshot.TS.Less(c.proc.GetTxnOperator().Txn().SnapshotTS) {
 			if c.proc.GetCloneTxnOperator() != nil {
 				txnOp = c.proc.GetCloneTxnOperator()
 			} else {
-				txnOp = c.proc.TxnOperator.CloneSnapshotOp(*n.ScanSnapshot.TS)
+				txnOp = c.proc.GetTxnOperator().CloneSnapshotOp(*n.ScanSnapshot.TS)
 				c.proc.SetCloneTxnOperator(txnOp)
 			}
 
@@ -2322,7 +2322,7 @@ func (c *Compile) compileTableScanDataSource(s *Scope) error {
 	}
 	//-----------------------------------------------------------------------------------------------------
 
-	if c.proc != nil && c.proc.TxnOperator != nil {
+	if c.proc != nil && c.proc.GetTxnOperator() != nil {
 		ts = txnOp.Txn().SnapshotTS
 	}
 	{
@@ -2399,12 +2399,7 @@ func (c *Compile) compileRestrict(n *plan.Node, ss []*Scope) []*Scope {
 		return ss
 	}
 	currentFirstFlag := c.anal.isFirst
-	// for dynamic parameter, substitute param ref and const fold cast expression here to improve performance
-	newFilters, err := plan2.ConstandFoldList(n.FilterList, c.proc, false)
-	if err != nil {
-		newFilters = n.FilterList
-	}
-	filterExpr := colexec.RewriteFilterExprList(newFilters)
+	filterExpr := colexec.RewriteFilterExprList(plan2.DeepCopyExprList(n.FilterList))
 	for i := range ss {
 		ss[i].appendInstruction(vm.Instruction{
 			Op:      vm.Filter,
@@ -3547,7 +3542,7 @@ func (c *Compile) newMergeScope(ss []*Scope) *Scope {
 	}
 	rs.Proc = process.NewFromProc(c.proc, c.ctx, cnt)
 	if len(ss) > 0 {
-		rs.Proc.LoadTag = ss[0].Proc.LoadTag
+		rs.Proc.Base.LoadTag = ss[0].Proc.Base.LoadTag
 	}
 	rs.appendInstruction(vm.Instruction{
 		Op:      vm.Merge,
@@ -3960,7 +3955,7 @@ func (c *Compile) initAnalyze(qry *plan.Query) {
 			node.AnalyzeInfo = new(plan.AnalyzeInfo)
 		}
 	}
-	c.proc.AnalInfos = c.anal.analInfos
+	c.proc.Base.AnalInfos = c.anal.analInfos
 }
 
 func (c *Compile) fillAnalyzeInfo() {
@@ -4016,14 +4011,14 @@ func (c *Compile) expandRanges(n *plan.Node, rel engine.Relation, blockFilterLis
 
 	//-----------------------------------------------------------------------------------------------------
 	ctx := c.ctx
-	txnOp = c.proc.TxnOperator
+	txnOp = c.proc.GetTxnOperator()
 	if n.ScanSnapshot != nil && n.ScanSnapshot.TS != nil {
 		if !n.ScanSnapshot.TS.Equal(timestamp.Timestamp{LogicalTime: 0, PhysicalTime: 0}) &&
-			n.ScanSnapshot.TS.Less(c.proc.TxnOperator.Txn().SnapshotTS) {
+			n.ScanSnapshot.TS.Less(c.proc.GetTxnOperator().Txn().SnapshotTS) {
 			if c.proc.GetCloneTxnOperator() != nil {
 				txnOp = c.proc.GetCloneTxnOperator()
 			} else {
-				txnOp = c.proc.TxnOperator.CloneSnapshotOp(*n.ScanSnapshot.TS)
+				txnOp = c.proc.GetTxnOperator().CloneSnapshotOp(*n.ScanSnapshot.TS)
 				c.proc.SetCloneTxnOperator(txnOp)
 			}
 
@@ -4113,12 +4108,12 @@ func (c *Compile) generateNodes(n *plan.Node) (engine.Nodes, []any, []types.T, e
 
 	//------------------------------------------------------------------------------------------------------------------
 	ctx := c.ctx
-	txnOp = c.proc.TxnOperator
+	txnOp = c.proc.GetTxnOperator()
 	if n.ScanSnapshot != nil && n.ScanSnapshot.TS != nil {
 		if !n.ScanSnapshot.TS.Equal(timestamp.Timestamp{LogicalTime: 0, PhysicalTime: 0}) &&
-			n.ScanSnapshot.TS.Less(c.proc.TxnOperator.Txn().SnapshotTS) {
+			n.ScanSnapshot.TS.Less(c.proc.GetTxnOperator().Txn().SnapshotTS) {
 
-			txnOp = c.proc.TxnOperator.CloneSnapshotOp(*n.ScanSnapshot.TS)
+			txnOp = c.proc.GetTxnOperator().CloneSnapshotOp(*n.ScanSnapshot.TS)
 			c.proc.SetCloneTxnOperator(txnOp)
 
 			if n.ScanSnapshot.Tenant != nil {
@@ -4255,7 +4250,7 @@ func (c *Compile) generateNodes(n *plan.Node) (engine.Nodes, []any, []types.T, e
 				var objMeta objectio.ObjectMeta
 				location := blk.MetaLocation()
 				var fs fileservice.FileService
-				fs, err = fileservice.Get[fileservice.FileService](c.proc.FileService, defines.SharedFileServiceName)
+				fs, err = fileservice.Get[fileservice.FileService](c.proc.Base.FileService, defines.SharedFileServiceName)
 				if err != nil {
 					return nil, nil, nil, err
 				}
@@ -4730,7 +4725,7 @@ func shuffleBlocksByRange(c *Compile, ranges objectio.BlockInfoSlice, n *plan.No
 	for i := 0; i < ranges.Len(); i++ {
 		unmarshalledBlockInfo := ranges.Get(i)
 		location := unmarshalledBlockInfo.MetaLocation()
-		fs, err := fileservice.Get[fileservice.FileService](c.proc.FileService, defines.SharedFileServiceName)
+		fs, err := fileservice.Get[fileservice.FileService](c.proc.Base.FileService, defines.SharedFileServiceName)
 		if err != nil {
 			return err
 		}
@@ -4887,9 +4882,9 @@ func (c *Compile) runSqlWithResult(sql string) (executor.Result, error) {
 		// All runSql and runSqlWithResult is a part of input sql, can not incr statement.
 		// All these sub-sql's need to be rolled back and retried en masse when they conflict in pessimistic mode
 		WithDisableIncrStatement().
-		WithTxn(c.proc.TxnOperator).
+		WithTxn(c.proc.GetTxnOperator()).
 		WithDatabase(c.db).
-		WithTimeZone(c.proc.SessionInfo.TimeZone)
+		WithTimeZone(c.proc.GetSessionInfo().TimeZone)
 	return exec.Exec(c.proc.Ctx, sql, opts)
 }
 
@@ -4973,7 +4968,7 @@ func (c *Compile) fatalLog(retry int, err error) {
 		return
 	}
 
-	txnTrace.GetService().TxnError(c.proc.TxnOperator, err)
+	txnTrace.GetService().TxnError(c.proc.GetTxnOperator(), err)
 
 	v, ok := moruntime.ProcessLevelRuntime().
 		GetGlobalVariables(moruntime.EnableCheckInvalidRCErrors)
@@ -4982,7 +4977,7 @@ func (c *Compile) fatalLog(retry int, err error) {
 	}
 
 	c.proc.Fatalf(c.ctx, "BUG(RC): txn %s retry %d, error %+v\n",
-		hex.EncodeToString(c.proc.TxnOperator.Txn().ID),
+		hex.EncodeToString(c.proc.GetTxnOperator().Txn().ID),
 		retry,
 		err.Error())
 }
