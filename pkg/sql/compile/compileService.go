@@ -113,11 +113,15 @@ func (srv *ServiceOfCompile) getCompile(proc *process.Process) *Compile {
 	// 	lockTables:   make(map[uint64]*plan.LockTarget),
 	// 	MessageBoard: process.NewMessageBoard(),
 	// }
-	runningCompile.AllocMsg = time.Now().String() + " : " + string(debug.Stack())
-	runningCompile.OnUsed = true
+	if runningCompile.MessageBoard.OnUsed {
+		fmt.Print("dddd")
+	}
+	runningCompile.AllocMsg = "alloc:" + time.Now().String() + " : " + string(debug.Stack())
+	runningCompile.MessageBoard.OnUsed = true
 	runningCompile.proc = proc
 	compPtr := fmt.Sprintf("%p", runningCompile)
 	runningCompile.MessageBoard.CompPtr = compPtr
+	runningCompile.MessageBoard.AllocMsg = "alloc [" + compPtr + "]" + time.Now().String() + " : " + string(debug.Stack())
 	return runningCompile
 }
 
@@ -151,11 +155,26 @@ func (srv *ServiceOfCompile) endService(c *Compile) (mustReturnError bool, err e
 }
 
 func (srv *ServiceOfCompile) putCompile(c *Compile) {
-	if !c.isPrepare {
-		c.FreeMsg = time.Now().String() + " : " + string(debug.Stack())
-		c.OnUsed = false
-		reuse.Free[Compile](c, nil)
+	if !c.MessageBoard.OnUsed {
+		aa := "free" + time.Now().String() + " : " + string(debug.Stack())
+		fmt.Print(aa)
 	}
+	str := fmt.Sprintf("%p", c)
+	if process.GlobalMbCompileMap.Contains(str) {
+		msg := "free" + time.Now().String() + " : " + string(debug.Stack())
+		fmt.Print(msg)
+	}
+	if !c.isPrepare {
+		c.FreeMsg = "free" + time.Now().String() + " : " + string(debug.Stack())
+		c.OnUsed = false
+
+		c.MessageBoard.FreeMsg = "free [" + str + "]" + time.Now().String() + " : " + string(debug.Stack())
+		c.MessageBoard.OnUsed = false
+
+		reuse.Free[Compile](c, nil)
+
+	}
+
 }
 
 func (srv *ServiceOfCompile) aliveCompile() int {

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	goruntime "runtime"
 	"runtime/debug"
@@ -631,6 +632,7 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 	if len(s.DataSource.RuntimeFilterSpecs) > 0 {
 		for _, spec := range s.DataSource.RuntimeFilterSpecs {
 			msgReceiver := c.proc.NewMessageReceiver([]int32{spec.Tag}, process.AddrBroadCastOnCurrentCN())
+			defer msgReceiver.Free()
 			msgs, ctxDone := msgReceiver.ReceiveMessage(true, s.Proc.Ctx)
 			if ctxDone {
 				return nil
@@ -654,7 +656,7 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 				exprs = append(exprs, spec.Expr)
 				filters = append(filters, msg)
 			}
-			msgReceiver.Free()
+
 		}
 	}
 
@@ -1182,6 +1184,13 @@ func (s *Scope) replace(c *Compile) error {
 }
 
 func (s *Scope) getReaders(c *Compile, maxProvidedCpuNumber int) (readers []engine.Reader, scanUsedCpuNumber int, err error) {
+	str := fmt.Sprintf("%p", c)
+	defer func() {
+		if process.GlobalMbCompileMap.Contains(str) {
+			msg := "free" + time.Now().String() + " : " + string(debug.Stack())
+			fmt.Print(msg)
+		}
+	}()
 	// receive runtime filter and optimized the datasource.
 	if err = s.handleRuntimeFilter(c); err != nil {
 		return

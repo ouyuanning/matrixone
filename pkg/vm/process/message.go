@@ -17,6 +17,7 @@ package process
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -36,6 +37,39 @@ const (
 	MsgHashMap       MsgType = 4
 	MaxMessage       MsgType = 1024
 )
+
+var GlobalMbCompileMap *RecvMbCompileMap
+
+type RecvMbCompileMap struct {
+	RwMutex *sync.Mutex
+	data    map[string]string
+}
+
+func init() {
+	GlobalMbCompileMap = &RecvMbCompileMap{
+		RwMutex: &sync.Mutex{},
+		data:    make(map[string]string),
+	}
+}
+
+func (r *RecvMbCompileMap) insert(key string, val string) {
+	r.RwMutex.Lock()
+	r.data[key] = val
+	r.RwMutex.Unlock()
+}
+
+func (r *RecvMbCompileMap) remove(key string) {
+	r.RwMutex.Lock()
+	delete(r.data, key)
+	r.RwMutex.Unlock()
+}
+
+func (r *RecvMbCompileMap) Contains(key string) bool {
+	r.RwMutex.Lock()
+	_, exists := r.data[key]
+	r.RwMutex.Unlock()
+	return exists
+}
 
 func (m MsgType) MessageName() string {
 	switch m {
@@ -74,7 +108,10 @@ type MessageBoard struct {
 	Waiters       []chan bool
 	RwMutex       *sync.RWMutex
 
-	CompPtr string
+	CompPtr  string
+	OnUsed   bool
+	FreeMsg  string
+	AllocMsg string
 }
 
 func NewMessageBoard() *MessageBoard {
@@ -115,6 +152,10 @@ func (m *MessageBoard) Reset() *MessageBoard {
 	m.Waiters = m.Waiters[:0]
 	m.multiCN = false
 	fmt.Printf("reset mb, comp=%s \n", m.CompPtr)
+	fmt.Printf(time.Now().String() + " : ")
+	if GlobalMbCompileMap.Contains(m.CompPtr) {
+		fmt.Print("can not reset\n")
+	}
 	return m
 }
 
@@ -129,6 +170,9 @@ type MessageReceiver struct {
 
 func (proc *Process) SendMessage(m Message) {
 	mb := proc.Base.MessageBoard
+	if !mb.OnUsed {
+		fmt.Print("dddd")
+	}
 	if m.GetReceiverAddr().CnAddr == CURRENTCN { // message for current CN
 		mb.RwMutex.Lock()
 		mb.Messages = append(mb.Messages, &m)
@@ -157,6 +201,9 @@ func (proc *Process) NewMessageReceiver(tags []int32, addr MessageAddress) *Mess
 }
 
 func (mr *MessageReceiver) receiveMessageNonBlock() []Message {
+	if !mr.mb.OnUsed {
+		fmt.Print("dddd")
+	}
 	mr.mb.RwMutex.RLock()
 	defer mr.mb.RwMutex.RUnlock()
 	var result []Message
@@ -204,6 +251,11 @@ func (mr *MessageReceiver) ReceiveMessage(needBlock bool, ctx context.Context) (
 		mr.mb.Waiters = append(mr.mb.Waiters, mr.waiter)
 		mr.mb.RwMutex.Unlock()
 	}
+	str := time.Now().String() + " : " + string(debug.Stack())
+	GlobalMbCompileMap.insert(mr.mb.CompPtr, str)
+	defer func() {
+		GlobalMbCompileMap.remove(mr.mb.CompPtr)
+	}()
 	for {
 		ctxTimeout, ctxCancel := context.WithTimeout(context.TODO(), 20*time.Second)
 		defer ctxCancel()

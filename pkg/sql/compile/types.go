@@ -313,6 +313,7 @@ type Compile struct {
 	OnUsed   bool
 	AllocMsg string
 	FreeMsg  string
+	ResetMsg string
 }
 
 type RemoteReceivRegInfo struct {

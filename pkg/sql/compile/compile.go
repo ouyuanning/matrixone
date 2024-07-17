@@ -22,6 +22,7 @@ import (
 	"math"
 	"net"
 	"runtime"
+	"runtime/debug"
 	gotrace "runtime/trace"
 	"sort"
 	"strings"
@@ -175,6 +176,7 @@ func (c *Compile) GetMessageCenter() *process.MessageCenter {
 }
 
 func (c *Compile) Reset(proc *process.Process, startAt time.Time, fill func(*batch.Batch) error, sql string) {
+	c.ResetMsg = time.Now().String() + " : " + string(debug.Stack())
 	c.proc = proc
 	c.fill = fill
 	c.sql = sql
@@ -196,6 +198,7 @@ func (c *Compile) Reset(proc *process.Process, startAt time.Time, fill func(*bat
 	}
 
 	// c.MessageBoard = c.MessageBoard.Reset()
+	proc.Base.MessageBoard = c.MessageBoard
 	c.counterSet.Reset()
 
 	for _, f := range c.fuzzys {
@@ -653,7 +656,7 @@ func (c *Compile) prepareRetry(defChanged bool) (*Compile, error) {
 	if e = runC.Compile(c.proc.Ctx, c.pn, c.fill); e != nil {
 		return nil, e
 	}
-	GetCompileService().startService(runC)
+	runC.AllocMsg = "retry---" + runC.AllocMsg
 	return runC, nil
 }
 
@@ -723,6 +726,14 @@ func (c *Compile) runOnce() error {
 
 	//c.printPipeline()
 	c.MessageBoard.Reset()
+
+	str := fmt.Sprintf("%p", c)
+	defer func() {
+		if process.GlobalMbCompileMap.Contains(str) {
+			msg := "free" + time.Now().String() + " : " + string(debug.Stack())
+			fmt.Print(msg)
+		}
+	}()
 
 	for i := range c.scope {
 		wg.Add(1)
