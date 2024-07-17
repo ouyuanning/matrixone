@@ -214,7 +214,7 @@ func (mr *MessageReceiver) ReceiveMessage(needBlock bool, ctx context.Context) (
 		select {
 		case <-ctxTimeout.Done():
 			fmt.Printf("recv msg, comp=%s, tag=%v\n", mr.mb.CompPtr, mr.tags)
-			fmt.Print("ddd")
+			fmt.Print("ddd\n")
 		case <-mr.waiter:
 		case <-ctx.Done():
 			return result, true

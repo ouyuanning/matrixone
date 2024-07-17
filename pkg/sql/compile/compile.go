@@ -153,7 +153,7 @@ func (c *Compile) Release() {
 	if c == nil {
 		return
 	}
-	_, _ = GetCompileService().putCompile(c)
+	GetCompileService().putCompile(c)
 }
 
 func (c Compile) TypeName() string {
@@ -653,7 +653,7 @@ func (c *Compile) prepareRetry(defChanged bool) (*Compile, error) {
 	if e = runC.Compile(c.proc.Ctx, c.pn, c.fill); e != nil {
 		return nil, e
 	}
-
+	GetCompileService().startService(runC)
 	return runC, nil
 }
 
@@ -716,6 +716,10 @@ func (c *Compile) runOnce() error {
 			return err
 		}
 	}
+	GetCompileService().startService(c)
+	defer func() {
+		_, _ = GetCompileService().endService(c)
+	}()
 
 	//c.printPipeline()
 	c.MessageBoard.Reset()

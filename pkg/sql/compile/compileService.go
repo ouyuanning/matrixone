@@ -17,7 +17,9 @@ package compile
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/matrixorigin/matrixone/pkg/common/reuse"
 	txnClient "github.com/matrixorigin/matrixone/pkg/txn/client"
@@ -94,8 +96,7 @@ func InitCompileService() *ServiceOfCompile {
 	return srv
 }
 
-func (srv *ServiceOfCompile) getCompile(
-	proc *process.Process) *Compile {
+func (srv *ServiceOfCompile) getCompile(proc *process.Process) *Compile {
 	// make sure the process has a cancel function.
 	if proc.Cancel == nil {
 		proc.Ctx, proc.Cancel = context.WithCancel(proc.Ctx)
@@ -112,10 +113,15 @@ func (srv *ServiceOfCompile) getCompile(
 	// 	lockTables:   make(map[uint64]*plan.LockTarget),
 	// 	MessageBoard: process.NewMessageBoard(),
 	// }
+	runningCompile.AllocMsg = time.Now().String() + " : " + string(debug.Stack())
+	runningCompile.OnUsed = true
 	runningCompile.proc = proc
 	compPtr := fmt.Sprintf("%p", runningCompile)
 	runningCompile.MessageBoard.CompPtr = compPtr
+	return runningCompile
+}
 
+func (srv *ServiceOfCompile) startService(runningCompile *Compile) {
 	if runningCompile.queryStatus == nil {
 		runningCompile.queryStatus = newQueryDoneWaiter()
 	} else {
@@ -125,27 +131,15 @@ func (srv *ServiceOfCompile) getCompile(
 	srv.Lock()
 	srv.aliveCompiles[runningCompile] = compileAdditionalInformation{
 		mustReturnError: nil,
-		queryCancel:     proc.Cancel,
+		queryCancel:     runningCompile.proc.Cancel,
 		queryDone:       runningCompile.queryStatus,
 	}
 	srv.Unlock()
 
-	return runningCompile
 }
 
-func (srv *ServiceOfCompile) putCompile(c *Compile) (mustReturnError bool, err error) {
+func (srv *ServiceOfCompile) endService(c *Compile) (mustReturnError bool, err error) {
 	c.queryStatus.noticeQueryCompleted()
-
-	if c.isPrepare {
-		srv.Lock()
-		if item, ok := srv.aliveCompiles[c]; ok {
-			err = item.mustReturnError
-		}
-		c.queryStatus.clear()
-		srv.Unlock()
-		return err != nil, err
-	}
-
 	srv.Lock()
 	if item, ok := srv.aliveCompiles[c]; ok {
 		err = item.mustReturnError
@@ -153,10 +147,15 @@ func (srv *ServiceOfCompile) putCompile(c *Compile) (mustReturnError bool, err e
 	delete(srv.aliveCompiles, c)
 	c.queryStatus.clear()
 	srv.Unlock()
-	// c.clear()
-	reuse.Free[Compile](c, nil)
-
 	return err != nil, err
+}
+
+func (srv *ServiceOfCompile) putCompile(c *Compile) {
+	if !c.isPrepare {
+		c.FreeMsg = time.Now().String() + " : " + string(debug.Stack())
+		c.OnUsed = false
+		reuse.Free[Compile](c, nil)
+	}
 }
 
 func (srv *ServiceOfCompile) aliveCompile() int {

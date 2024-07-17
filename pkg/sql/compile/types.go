@@ -309,6 +309,10 @@ type Compile struct {
 	lastAllocID int32
 
 	isPrepare bool
+
+	OnUsed   bool
+	AllocMsg string
+	FreeMsg  string
 }
 
 type RemoteReceivRegInfo struct {
