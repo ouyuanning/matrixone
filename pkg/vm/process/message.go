@@ -16,7 +16,9 @@ package process
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -71,6 +73,8 @@ type MessageBoard struct {
 	Messages      []*Message
 	Waiters       []chan bool
 	RwMutex       *sync.RWMutex
+
+	CompPtr string
 }
 
 func NewMessageBoard() *MessageBoard {
@@ -110,6 +114,7 @@ func (m *MessageBoard) Reset() *MessageBoard {
 	m.Messages = m.Messages[:0]
 	m.Waiters = m.Waiters[:0]
 	m.multiCN = false
+	fmt.Printf("reset mb, comp=%s \n", m.CompPtr)
 	return m
 }
 
@@ -128,6 +133,7 @@ func (proc *Process) SendMessage(m Message) {
 		mb.RwMutex.Lock()
 		mb.Messages = append(mb.Messages, &m)
 		if m.NeedBlock() {
+			fmt.Printf("send msg, comp=%s, tag=%v\n", mb.CompPtr, m.GetMsgTag())
 			// broadcast for block message
 			for _, ch := range mb.Waiters {
 				if ch != nil && len(ch) == 0 {
@@ -199,11 +205,16 @@ func (mr *MessageReceiver) ReceiveMessage(needBlock bool, ctx context.Context) (
 		mr.mb.RwMutex.Unlock()
 	}
 	for {
+		ctxTimeout, ctxCancel := context.WithTimeout(context.TODO(), 20*time.Second)
+		defer ctxCancel()
 		result = mr.receiveMessageNonBlock()
 		if len(result) > 0 {
 			break
 		}
 		select {
+		case <-ctxTimeout.Done():
+			fmt.Printf("recv msg, comp=%s, tag=%v\n", mr.mb.CompPtr, mr.tags)
+			fmt.Print("ddd")
 		case <-mr.waiter:
 		case <-ctx.Done():
 			return result, true

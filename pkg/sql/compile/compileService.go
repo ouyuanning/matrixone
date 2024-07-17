@@ -16,6 +16,7 @@ package compile
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/matrixorigin/matrixone/pkg/common/reuse"
@@ -101,7 +102,19 @@ func (srv *ServiceOfCompile) getCompile(
 	}
 
 	runningCompile := reuse.Alloc[Compile](nil)
+	// runningCompile := &Compile{
+	// 	affectRows:   &atomic.Uint64{},
+	// 	lock:         &sync.RWMutex{},
+	// 	counterSet:   &perfcounter.CounterSet{},
+	// 	nodeRegs:     make(map[[2]int32]*process.WaitRegister),
+	// 	stepRegs:     make(map[int32][][2]int32),
+	// 	metaTables:   make(map[string]struct{}),
+	// 	lockTables:   make(map[uint64]*plan.LockTarget),
+	// 	MessageBoard: process.NewMessageBoard(),
+	// }
 	runningCompile.proc = proc
+	compPtr := fmt.Sprintf("%p", runningCompile)
+	runningCompile.MessageBoard.CompPtr = compPtr
 
 	if runningCompile.queryStatus == nil {
 		runningCompile.queryStatus = newQueryDoneWaiter()
@@ -123,18 +136,25 @@ func (srv *ServiceOfCompile) getCompile(
 func (srv *ServiceOfCompile) putCompile(c *Compile) (mustReturnError bool, err error) {
 	c.queryStatus.noticeQueryCompleted()
 
-	srv.Lock()
+	if c.isPrepare {
+		srv.Lock()
+		if item, ok := srv.aliveCompiles[c]; ok {
+			err = item.mustReturnError
+		}
+		c.queryStatus.clear()
+		srv.Unlock()
+		return err != nil, err
+	}
 
+	srv.Lock()
 	if item, ok := srv.aliveCompiles[c]; ok {
 		err = item.mustReturnError
 	}
 	delete(srv.aliveCompiles, c)
 	c.queryStatus.clear()
 	srv.Unlock()
-
-	if !c.isPrepare {
-		reuse.Free[Compile](c, nil)
-	}
+	// c.clear()
+	reuse.Free[Compile](c, nil)
 
 	return err != nil, err
 }
