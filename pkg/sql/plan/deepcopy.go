@@ -844,6 +844,14 @@ func DeepCopyFkey(fkey *ForeignKeyDef) *ForeignKeyDef {
 	return def
 }
 
+func DeepCopyRuntimeFilterSpecList(rfs []*plan.RuntimeFilterSpec) []*plan.RuntimeFilterSpec {
+	newRFS := make([]*plan.RuntimeFilterSpec, len(rfs))
+	for i, rf := range rfs {
+		newRFS[i] = DeepCopyRuntimeFilterSpec(rf)
+	}
+	return newRFS
+}
+
 func DeepCopyRuntimeFilterSpec(rf *plan.RuntimeFilterSpec) *plan.RuntimeFilterSpec {
 	if rf == nil {
 		return nil
