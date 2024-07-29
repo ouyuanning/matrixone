@@ -291,8 +291,9 @@ func EvalExpressionOnce(proc *process.Process, planExpr *plan.Expr, batches []*b
 
 type FoldExpr struct {
 	overloadID int64
-	folded     *vector.Vector
-	inRuntime  bool
+	// folded     *vector.Vector
+	folded    bool
+	inRuntime bool
 }
 
 // FixedVectorExpressionExecutor
@@ -515,81 +516,107 @@ func (expr *FunctionExpressionExecutor) Init(
 	return err
 }
 
-func (expr *FunctionExpressionExecutor) constantFold(proc *process.Process, batches []*batch.Batch) (*vector.Vector, error) {
-	if expr.folded != nil {
-		return expr.folded, nil
-	}
-
+func (expr *FunctionExpressionExecutor) canFold(proc *process.Process) bool {
 	overload, _ := function.GetFunctionById(proc.Ctx, expr.overloadID)
 	if overload.CannotFold() {
-		return nil, nil
+		return false
 	}
 
 	if expr.inRuntime {
 		for _, paramE := range expr.parameterExecutor {
 			if _, ok := paramE.(*ColumnExpressionExecutor); ok {
-				return nil, nil
+				return false
 			}
 		}
 	} else {
 		if overload.IsRealTimeRelated() {
-			return nil, nil
+			return false
 		}
 		for _, paramE := range expr.parameterExecutor {
 			if _, ok := paramE.(*FixedVectorExpressionExecutor); !ok {
-				return nil, nil
+				return false
 			}
 		}
 	}
 
-	var err error
-	for i := range expr.parameterExecutor {
-		expr.parameterResults[i], err = expr.parameterExecutor[i].Eval(proc, batches, nil)
-		if err != nil {
-			return nil, err
-		}
-		if fixExe, ok := expr.parameterExecutor[i].(*FixedVectorExpressionExecutor); ok {
-			if !fixExe.fixed {
-				expr.parameterResults[i].SetLength(1)
-			}
-		}
-	}
-
-	execLen := 1
-	if len(expr.parameterResults) > 0 {
-		firstParam := expr.parameterResults[0]
-		if !firstParam.IsConst() {
-			execLen = firstParam.Length()
-		}
-	}
-
-	if len(batches) > 0 && execLen < batches[0].RowCount() {
-		execLen = batches[0].RowCount()
-	}
-
-	if err = expr.resultVector.PreExtendAndReset(execLen); err != nil {
-		return nil, err
-	}
-
-	if err = expr.evalFn(expr.parameterResults, expr.resultVector, proc, execLen, nil); err != nil {
-		return nil, err
-	}
-
-	oldResult := expr.resultVector.GetResultVector()
-	if execLen == 1 {
-		constResult := oldResult.ToConst(0, 1, proc.Mp())
-		defer constResult.Free(proc.GetMPool())
-		expr.folded, err = constResult.Dup(proc.GetMPool())
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		expr.folded = oldResult
-		expr.resultVector.SetResultVector(nil)
-	}
-
-	return expr.folded, nil
+	return true
 }
+
+// func (expr *FunctionExpressionExecutor) constantFold(proc *process.Process, batches []*batch.Batch) (*vector.Vector, error) {
+// 	if expr.folded != nil {
+// 		return expr.folded, nil
+// 	}
+
+// 	overload, _ := function.GetFunctionById(proc.Ctx, expr.overloadID)
+// 	if overload.CannotFold() {
+// 		return nil, nil
+// 	}
+
+// 	if expr.inRuntime {
+// 		for _, paramE := range expr.parameterExecutor {
+// 			if _, ok := paramE.(*ColumnExpressionExecutor); ok {
+// 				return nil, nil
+// 			}
+// 		}
+// 	} else {
+// 		if overload.IsRealTimeRelated() {
+// 			return nil, nil
+// 		}
+// 		for _, paramE := range expr.parameterExecutor {
+// 			if _, ok := paramE.(*FixedVectorExpressionExecutor); !ok {
+// 				return nil, nil
+// 			}
+// 		}
+// 	}
+
+// 	var err error
+// 	for i := range expr.parameterExecutor {
+// 		// expr.parameterResults[i], err = expr.parameterExecutor[i].Eval(proc, batches, nil)
+// 		// if err != nil {
+// 		// 	return nil, err
+// 		// }
+// 		if fixExe, ok := expr.parameterExecutor[i].(*FixedVectorExpressionExecutor); ok {
+// 			if !fixExe.fixed {
+// 				expr.parameterResults[i].SetLength(1)
+// 			}
+// 		}
+// 	}
+
+// 	execLen := 1
+// 	if len(expr.parameterResults) > 0 {
+// 		firstParam := expr.parameterResults[0]
+// 		if !firstParam.IsConst() {
+// 			execLen = firstParam.Length()
+// 		}
+// 	}
+
+// 	if len(batches) > 0 && execLen < batches[0].RowCount() {
+// 		execLen = batches[0].RowCount()
+// 	}
+
+// 	if err = expr.resultVector.PreExtendAndReset(execLen); err != nil {
+// 		return nil, err
+// 	}
+
+// 	if err = expr.evalFn(expr.parameterResults, expr.resultVector, proc, execLen, nil); err != nil {
+// 		return nil, err
+// 	}
+
+// 	oldResult := expr.resultVector.GetResultVector()
+// 	if execLen == 1 {
+// 		constResult := oldResult.ToConst(0, 1, proc.Mp())
+// 		defer constResult.Free(proc.GetMPool())
+// 		expr.folded, err = constResult.Dup(proc.GetMPool())
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 	} else {
+// 		expr.folded = oldResult
+// 		expr.resultVector.SetResultVector(nil)
+// 	}
+
+// 	return expr.folded, nil
+// }
 
 func (expr *FunctionExpressionExecutor) EvalIff(proc *process.Process, batches []*batch.Batch, selectList []bool) (err error) {
 	expr.parameterResults[0], err = expr.parameterExecutor[0].Eval(proc, batches, selectList)
@@ -661,7 +688,18 @@ func (expr *FunctionExpressionExecutor) EvalCase(proc *process.Process, batches 
 	return err
 }
 
+func (expr *FunctionExpressionExecutor) getFolded() *vector.Vector {
+	if expr.resultVector != nil && expr.folded {
+		return expr.resultVector.GetResultVector()
+	}
+	return nil
+}
+
 func (expr *FunctionExpressionExecutor) Eval(proc *process.Process, batches []*batch.Batch, selectList []bool) (*vector.Vector, error) {
+	if foldedVec := expr.getFolded(); foldedVec != nil {
+		return foldedVec, nil
+	}
+
 	var err error
 	if expr.fid == function.IFF {
 		err = expr.EvalIff(proc, batches, selectList)
@@ -682,20 +720,35 @@ func (expr *FunctionExpressionExecutor) Eval(proc *process.Process, batches []*b
 		}
 	}
 
-	vec, err := expr.constantFold(proc, batches)
-	if err != nil {
-		return nil, err
-	}
-	if vec != nil {
-		return vec, nil
+	execLen := 1
+	canFold := expr.canFold(proc)
+	if canFold {
+		for i := range expr.parameterExecutor {
+			fixExe := expr.parameterExecutor[i].(*FixedVectorExpressionExecutor)
+			expr.parameterResults[i] = fixExe.resultVector
+			if !fixExe.fixed {
+				expr.parameterResults[i].SetLength(1)
+			}
+		}
+		if len(expr.parameterResults) > 0 {
+			firstParam := expr.parameterResults[0]
+			if !firstParam.IsConst() {
+				execLen = firstParam.Length()
+			}
+		}
+		if len(batches) > 0 && execLen < batches[0].RowCount() {
+			execLen = batches[0].RowCount()
+		}
+	} else {
+		execLen = batches[0].RowCount()
 	}
 
-	if err = expr.resultVector.PreExtendAndReset(batches[0].RowCount()); err != nil {
+	if err = expr.resultVector.PreExtendAndReset(execLen); err != nil {
 		return nil, err
 	}
 
-	if len(expr.selectList.SelectList) < batches[0].RowCount() {
-		expr.selectList.SelectList = make([]bool, batches[0].RowCount())
+	if len(expr.selectList.SelectList) < execLen {
+		expr.selectList.SelectList = make([]bool, execLen)
 	}
 	if selectList == nil {
 		expr.selectList.AnyNull = false
@@ -717,9 +770,24 @@ func (expr *FunctionExpressionExecutor) Eval(proc *process.Process, batches []*b
 	}
 
 	if err = expr.evalFn(
-		expr.parameterResults, expr.resultVector, proc, batches[0].RowCount(), &expr.selectList); err != nil {
+		expr.parameterResults, expr.resultVector, proc, execLen, &expr.selectList); err != nil {
 		return nil, err
 	}
+
+	if canFold {
+		if execLen == 1 {
+			oldResult := expr.resultVector.GetResultVector()
+			constResult := oldResult.ToConst(0, 1, proc.Mp())
+			defer constResult.Free(proc.GetMPool())
+			newResult, err := constResult.Dup(proc.GetMPool())
+			if err != nil {
+				return nil, err
+			}
+			expr.resultVector.SetResultVector(newResult)
+		}
+		expr.folded = true
+	}
+
 	return expr.resultVector.GetResultVector(), nil
 }
 
@@ -739,25 +807,25 @@ func (expr *FunctionExpressionExecutor) Reset() {
 	for i := range expr.parameterExecutor {
 		expr.parameterExecutor[i].Reset()
 	}
-	if expr.folded != nil {
-		putMethod := expr.resultVector.GetPutVectorMethod()
-		if putMethod != nil {
-			putMethod(expr.folded)
-		}
-	}
+	// if expr.folded != nil && expr.resultVector != nil {
+	// 	putMethod := expr.resultVector.GetPutVectorMethod()
+	// 	if putMethod != nil {
+	// 		putMethod(expr.folded)
+	// 	}
+	// }
 }
 
 func (expr *FunctionExpressionExecutor) Free() {
 	if expr == nil {
 		return
 	}
-	if expr.folded != nil {
-		putMethod := expr.resultVector.GetPutVectorMethod()
-		if putMethod != nil {
-			putMethod(expr.folded)
-		}
-	}
 	if expr.resultVector != nil {
+		// if expr.folded != nil {
+		// 	putMethod := expr.resultVector.GetPutVectorMethod()
+		// 	if putMethod != nil {
+		// 		putMethod(expr.folded)
+		// 	}
+		// }
 		expr.resultVector.Free()
 		expr.resultVector = nil
 	}
