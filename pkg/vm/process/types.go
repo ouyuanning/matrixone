@@ -17,6 +17,7 @@ package process
 import (
 	"context"
 	"io"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -440,7 +441,8 @@ func (proc *Process) GetValueScanBatchs() []*batch.Batch {
 
 func (proc *Process) GetPrepareParamsAt(i int) ([]byte, error) {
 	if i < 0 || i >= proc.Base.prepareParams.Length() {
-		return nil, moerr.NewInternalError(proc.Ctx, "get prepare params error, index %d not exists", i)
+		msg := string(debug.Stack())
+		return nil, moerr.NewInternalError(proc.Ctx, "get prepare params error, index %d not exists,stack=%s", i, msg)
 	}
 	if proc.Base.prepareParams.IsNull(uint64(i)) {
 		return nil, nil
