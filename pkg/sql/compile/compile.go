@@ -2141,6 +2141,7 @@ func (c *Compile) compileTableScanDataSource(s *Scope) error {
 		filterExpr = colexec.RewriteFilterExprList(n.FilterList)
 		filterExpr, err = plan2.ConstantFold(batch.EmptyForConstFoldBatch, plan2.DeepCopyExpr(filterExpr), c.proc, true, true)
 		if err != nil {
+			logutil.Errorf("------- old expr=%v, new expr=%v, node's expr=%v", s.DataSource.FilterExpr, filterExpr, n.FilterList)
 			return err
 		}
 	}
