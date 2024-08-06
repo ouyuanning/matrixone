@@ -27,6 +27,7 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/container/nulls"
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
+	"github.com/matrixorigin/matrixone/pkg/logutil"
 	"github.com/matrixorigin/matrixone/pkg/pb/plan"
 	"github.com/matrixorigin/matrixone/pkg/pb/timestamp"
 	"github.com/matrixorigin/matrixone/pkg/sql/parsers/tree"
@@ -325,6 +326,14 @@ func buildInsert(stmt *tree.Insert, ctx CompilerContext, isReplace bool, isPrepa
 	reduceSinkSinkScanNodes(query)
 	builder.tempOptimizeForDML()
 	reCheckifNeedLockWholeTable(builder, stmt.IsRestore)
+
+	for _, n := range query.Nodes {
+		if n.NodeType == plan.Node_TABLE_SCAN {
+			if n.TableDef.Name == "bmsql_new_order" {
+				logutil.Infof("------ node's filterlist in build insert is %v", n.FilterList)
+			}
+		}
+	}
 
 	return &Plan{
 		Plan: &plan.Plan_Query{

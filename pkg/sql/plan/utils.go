@@ -31,6 +31,7 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	"github.com/matrixorigin/matrixone/pkg/container/vector"
 	"github.com/matrixorigin/matrixone/pkg/fileservice"
+	"github.com/matrixorigin/matrixone/pkg/logutil"
 	"github.com/matrixorigin/matrixone/pkg/pb/plan"
 	"github.com/matrixorigin/matrixone/pkg/sql/colexec"
 	"github.com/matrixorigin/matrixone/pkg/sql/parsers/dialect"
@@ -1936,6 +1937,18 @@ func ResetPreparePlan(ctx CompilerContext, preparePlan *Plan) ([]*plan.ObjectRef
 		err = VisitQuery.Visit(ctx.GetContext())
 		if err != nil {
 			return nil, nil, err
+		}
+
+		if q, ok := preparePlan.Plan.(*plan.Plan_Query); ok {
+			if q.Query.StmtType == plan.Query_INSERT {
+				for _, n := range q.Query.Nodes {
+					if n.NodeType == plan.Node_TABLE_SCAN {
+						if n.TableDef.Name == "bmsql_new_order" {
+							logutil.Infof("------ node's filterlist in resetPreparePlan is %v", n.FilterList)
+						}
+					}
+				}
+			}
 		}
 	}
 	return schemas, paramTypes, nil

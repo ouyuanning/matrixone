@@ -497,6 +497,18 @@ func (c *Compile) Run(_ uint64) (result *util2.RunResult, err error) {
 		c.proc.SetPrepareExprList(nil)
 	}()
 
+	if q, ok := c.pn.Plan.(*plan.Plan_Query); ok {
+		if q.Query.StmtType == plan.Query_INSERT {
+			for _, n := range q.Query.Nodes {
+				if n.NodeType == plan.Node_TABLE_SCAN {
+					if n.TableDef.Name == "bmsql_new_order" {
+						logutil.Infof("------ node's filterlist in compile is %v", n.FilterList)
+					}
+				}
+			}
+		}
+	}
+
 	var writeOffset uint64
 
 	start := time.Now()
