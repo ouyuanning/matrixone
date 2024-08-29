@@ -83,6 +83,7 @@ type Source struct {
 	Rel                    engine.Relation
 	Bat                    *batch.Batch
 	FilterExpr             *plan.Expr // todo: change this to []*plan.Expr
+	BlockFilter            []*plan.Expr
 	node                   *plan.Node
 	TableDef               *plan.TableDef
 	Timestamp              timestamp.Timestamp
@@ -306,7 +307,7 @@ type Compile struct {
 	lockTables   map[uint64]*plan.LockTarget
 	disableRetry bool
 
-	rangesExprExecutor map[uint32]*colexec.ExpressionExecutor
+	rangesExprExecutor map[int]colexec.ExpressionExecutor
 
 	isPrepare bool
 }

@@ -185,6 +185,10 @@ func (c *Compile) Reset(proc *process.Process, startAt time.Time, fill func(*bat
 		s.Reset(c)
 	}
 
+	for _, e := range c.rangesExprExecutor {
+		e.ResetForNextQuery()
+	}
+
 	for _, v := range c.nodeRegs {
 		v.CleanChannel(c.proc.GetMPool())
 	}
@@ -255,6 +259,10 @@ func (c *Compile) clear() {
 	}
 	for k := range c.cnLabel {
 		delete(c.cnLabel, k)
+	}
+	for k := range c.rangesExprExecutor {
+		c.rangesExprExecutor[k].Free()
+		delete(c.rangesExprExecutor, k)
 	}
 }
 
@@ -1884,6 +1892,19 @@ func (c *Compile) compileTableScanDataSource(s *Scope) error {
 		filterExpr, err = plan2.ConstantFold(batch.EmptyForConstFoldBatch, plan2.DeepCopyExpr(filterExpr), c.proc, true, true)
 		if err != nil {
 			return err
+		}
+	}
+	if len(n.BlockFilterList) != len(s.DataSource.BlockFilter) {
+		s.DataSource.BlockFilter = plan2.DeepCopyExprList(n.BlockFilterList)
+		for _, e := range s.DataSource.BlockFilter {
+			fn := e.GetF()
+			if fn == nil {
+				panic("not function expr for filter")
+			}
+			_, err := plan2.ReplaceFoldVal(c.proc, e, c.rangesExprExecutor)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -3969,7 +3990,17 @@ func (c *Compile) generateNodes(n *plan.Node) (engine.Nodes, []any, []types.T, e
 				},
 			}
 		}
-		relData, err = c.expandRanges(n, rel, n.BlockFilterList)
+		//@todo need remove expandRanges from Compile.
+		// all expandRanges should be called by Run
+		var filterExpr *plan.Expr
+		if len(n.BlockFilterList) > 0 {
+			filterExpr = colexec.RewriteFilterExprList(n.BlockFilterList)
+			filterExpr, err = plan2.ConstantFold(batch.EmptyForConstFoldBatch, plan2.DeepCopyExpr(filterExpr), c.proc, true, true)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+		}
+		relData, err = c.expandRanges(n, rel, []*plan.Expr{filterExpr})
 		if err != nil {
 			return nil, nil, nil, err
 		}
