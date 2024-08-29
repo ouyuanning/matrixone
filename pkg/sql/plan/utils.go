@@ -24,6 +24,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"unsafe"
 
 	"github.com/matrixorigin/matrixone/pkg/common/moerr"
 	"github.com/matrixorigin/matrixone/pkg/common/mpool"
@@ -2333,4 +2334,81 @@ func Find[T ~string | ~int, S any](data map[T]S, val T) bool {
 		return true
 	}
 	return false
+}
+
+// a > current_time() + 1 and b < ? + c and d > ? + 2
+// =>
+// a > foldVal1 and b < foldVal2 + c and d > foldVal3
+func ReplaceFoldVal(proc *process.Process, expr *Expr, executorMap map[int]colexec.ExpressionExecutor) (*Expr, bool, error) {
+	allCanFold := true
+	var err error
+
+	fn := expr.GetF()
+	if fn == nil {
+		switch ef := expr.Expr.(type) {
+		case *plan.Expr_List:
+			//这里目前有问题，  a in (current_time(), 2),   (current_time(), 2) 这个list现在没有对应的executor
+			for i := range ef.List.List {
+				if !rule.IsConstant(ef.List.List[i], false) {
+					return expr, false, nil
+				}
+			}
+			return expr, true, nil
+		case *plan.Expr_Col:
+			return expr, false, nil
+		default:
+			return expr, true, nil
+		}
+	}
+
+	overloadID := fn.Func.GetObj()
+	f, exists := function.GetFunctionByIdWithoutError(overloadID)
+	if !exists {
+		panic("ReplaceFoldVal: function not exist")
+	}
+	if f.IsAgg() || f.IsWin() {
+		panic("ReplaceFoldVal: agg or window function")
+	}
+
+	argFold := make([]bool, len(fn.Args))
+	for i := range fn.Args {
+		fn.Args[i], argFold[i], err = ReplaceFoldVal(proc, fn.Args[i], executorMap)
+		if err != nil {
+			return nil, false, err
+		}
+		if !argFold[i] {
+			allCanFold = false
+		}
+	}
+
+	if allCanFold {
+		return expr, true, nil
+	} else {
+		for i, canFold := range argFold {
+			if canFold {
+				exprExecutor, err := colexec.NewExpressionExecutor(proc, fn.Args[i])
+				if err != nil {
+					return nil, false, err
+				}
+				ptr := uintptr(unsafe.Pointer(&exprExecutor))
+				newID := len(executorMap)
+				executorMap[newID] = exprExecutor
+
+				fn.Args[i] = &plan.Expr{
+					Typ: fn.Args[i].Typ,
+					Expr: &plan.Expr_Fold{
+						Fold: &plan.FoldVal{
+							Id:  int32(newID),
+							Ptr: uint64(ptr),
+						},
+					},
+					AuxId:       fn.Args[i].AuxId,
+					Ndv:         fn.Args[i].Ndv,
+					Selectivity: fn.Args[i].Selectivity,
+				}
+
+			}
+		}
+		return expr, false, nil
+	}
 }
