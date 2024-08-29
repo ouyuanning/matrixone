@@ -17,6 +17,7 @@ package disttae
 import (
 	"context"
 	"sort"
+	"unsafe"
 
 	"github.com/matrixorigin/matrixone/pkg/catalog"
 	"github.com/matrixorigin/matrixone/pkg/container/types"
@@ -27,6 +28,7 @@ import (
 	"github.com/matrixorigin/matrixone/pkg/pb/plan"
 	"github.com/matrixorigin/matrixone/pkg/pb/timestamp"
 	plan2 "github.com/matrixorigin/matrixone/pkg/sql/plan"
+	"github.com/matrixorigin/matrixone/pkg/sql/plan/rule"
 	"github.com/matrixorigin/matrixone/pkg/util"
 	v2 "github.com/matrixorigin/matrixone/pkg/util/metric/v2"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/disttae/logtailreplay"
@@ -106,6 +108,31 @@ func isSortedKey(colDef *plan.ColDef) (isPK, isSorted bool) {
 	isPK, isCluster := colDef.Primary, colDef.ClusterBy
 	isSorted = isPK || isCluster
 	return
+}
+
+func getConstBytesFromExpr2(exprs []*plan.Expr, colDef *plan.ColDef, _ *process.Process) ([][]byte, bool) {
+	vals := make([][]byte, len(exprs))
+	for idx := range exprs {
+		if fExpr, ok := exprs[idx].Expr.(*plan.Expr_Fold); ok {
+			ptr := uintptr(fExpr.Fold.Ptr)
+			vec := (*vector.Vector)(unsafe.Pointer(ptr))
+			constVal := rule.GetConstantValue(vec, true, 0)
+			if constVal == nil {
+				return nil, false
+			}
+			colType := types.T(colDef.Typ.Id)
+			val, ok := evalLiteralExpr2(constVal, colType)
+			if !ok {
+				return nil, ok
+			}
+
+			vals[idx] = val
+		} else {
+			return nil, false
+		}
+	}
+
+	return vals, true
 }
 
 func getConstBytesFromExpr(exprs []*plan.Expr, colDef *plan.ColDef, proc *process.Process) ([][]byte, bool) {

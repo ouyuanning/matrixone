@@ -2423,7 +2423,7 @@ func EvalFoldValExpr(proc *process.Process, expr *Expr, executorMap map[int]cole
 		if err != nil {
 			return err
 		}
-		ptr := uintptr(unsafe.Pointer(&vec))
+		ptr := uintptr(unsafe.Pointer(vec))
 		ef.Fold.Ptr = uint64(ptr)
 	case *plan.Expr_F:
 		for i := range ef.F.Args {
