@@ -657,8 +657,8 @@ func (s *Scope) handleRuntimeFilter(c *Compile) error {
 
 		newExprList := plan2.DeepCopyExprList(inExprList)
 		if len(s.DataSource.node.BlockFilterList) > 0 {
-			newExprList = append(newExprList, s.DataSource.node.BlockFilterList...)
-			// newExprList = append(newExprList, s.DataSource.BlockFilter...)
+			// newExprList = append(newExprList, s.DataSource.node.BlockFilterList...)
+			newExprList = append(newExprList, s.DataSource.BlockFilter...)
 		}
 
 		relData, err := c.expandRanges(s.DataSource.node, s.DataSource.Rel, newExprList)

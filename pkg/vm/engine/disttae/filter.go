@@ -110,7 +110,7 @@ func isSortedKey(colDef *plan.ColDef) (isPK, isSorted bool) {
 	return
 }
 
-func getConstBytesFromExpr2(exprs []*plan.Expr, colDef *plan.ColDef, _ *process.Process) ([][]byte, bool) {
+func getConstBytesFromExpr(exprs []*plan.Expr, colDef *plan.ColDef, proc *process.Process) ([][]byte, bool) {
 	vals := make([][]byte, len(exprs))
 	for idx := range exprs {
 		if fExpr, ok := exprs[idx].Expr.(*plan.Expr_Fold); ok {
@@ -128,31 +128,41 @@ func getConstBytesFromExpr2(exprs []*plan.Expr, colDef *plan.ColDef, _ *process.
 
 			vals[idx] = val
 		} else {
-			return nil, false
+			constVal := getConstValueByExpr(exprs[idx], proc)
+			if constVal == nil {
+				return nil, false
+			}
+			colType := types.T(colDef.Typ.Id)
+			val, ok := evalLiteralExpr2(constVal, colType)
+			if !ok {
+				return nil, ok
+			}
+
+			vals[idx] = val
 		}
 	}
 
 	return vals, true
 }
 
-func getConstBytesFromExpr(exprs []*plan.Expr, colDef *plan.ColDef, proc *process.Process) ([][]byte, bool) {
-	vals := make([][]byte, len(exprs))
-	for idx := range exprs {
-		constVal := getConstValueByExpr(exprs[idx], proc)
-		if constVal == nil {
-			return nil, false
-		}
-		colType := types.T(colDef.Typ.Id)
-		val, ok := evalLiteralExpr2(constVal, colType)
-		if !ok {
-			return nil, ok
-		}
+// func getConstBytesFromExpr(exprs []*plan.Expr, colDef *plan.ColDef, proc *process.Process) ([][]byte, bool) {
+// 	vals := make([][]byte, len(exprs))
+// 	for idx := range exprs {
+// 		constVal := getConstValueByExpr(exprs[idx], proc)
+// 		if constVal == nil {
+// 			return nil, false
+// 		}
+// 		colType := types.T(colDef.Typ.Id)
+// 		val, ok := evalLiteralExpr2(constVal, colType)
+// 		if !ok {
+// 			return nil, ok
+// 		}
 
-		vals[idx] = val
-	}
+// 		vals[idx] = val
+// 	}
 
-	return vals, true
-}
+// 	return vals, true
+// }
 
 func mustColVecValueFromBinaryFuncExpr(proc *process.Process, expr *plan.Expr_F) (*plan.Expr_Col, []byte, bool) {
 	var (

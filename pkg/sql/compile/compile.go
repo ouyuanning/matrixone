@@ -3992,15 +3992,16 @@ func (c *Compile) generateNodes(n *plan.Node) (engine.Nodes, []any, []types.T, e
 		}
 		//@todo need remove expandRanges from Compile.
 		// all expandRanges should be called by Run
-		var filterExpr *plan.Expr
+		var filterExpr []*plan.Expr
 		if len(n.BlockFilterList) > 0 {
-			filterExpr = colexec.RewriteFilterExprList(n.BlockFilterList)
-			filterExpr, err = plan2.ConstantFold(batch.EmptyForConstFoldBatch, plan2.DeepCopyExpr(filterExpr), c.proc, true, true)
+			tmpExpr := colexec.RewriteFilterExprList(plan2.DeepCopyExprList(n.BlockFilterList))
+			tmpExpr, err = plan2.ConstantFold(batch.EmptyForConstFoldBatch, tmpExpr, c.proc, true, true)
 			if err != nil {
 				return nil, nil, nil, err
 			}
+			filterExpr = append(filterExpr, tmpExpr)
 		}
-		relData, err = c.expandRanges(n, rel, []*plan.Expr{filterExpr})
+		relData, err = c.expandRanges(n, rel, filterExpr)
 		if err != nil {
 			return nil, nil, nil, err
 		}
