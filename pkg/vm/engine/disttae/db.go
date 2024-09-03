@@ -16,10 +16,11 @@ package disttae
 
 import (
 	"context"
-	"github.com/matrixorigin/matrixone/pkg/logutil"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/matrixorigin/matrixone/pkg/logutil"
 
 	"github.com/matrixorigin/matrixone/pkg/catalog"
 	"github.com/matrixorigin/matrixone/pkg/common/moerr"
@@ -93,6 +94,7 @@ func (e *Engine) init(ctx context.Context) error {
 		state.HandleRowsInsert(ctx, ibat, catalog.MO_DATABASE_CPKEY_IDX, packer, e.mp)
 		done()
 		e.catalog.InsertDatabase(bat)
+		bat.Clean(m)
 	}
 
 	{ // init mo_database table
@@ -124,6 +126,7 @@ func (e *Engine) init(ctx context.Context) error {
 		state.HandleRowsInsert(ctx, ibat, catalog.MO_TABLES_CPKEY_IDX, packer, e.mp)
 		done()
 		e.catalog.InsertTable(bat) // cache
+		bat.Clean(m)
 		// do not clean the bat because the the partition state will be holding the bat
 
 		// insert into mo_columns partition
@@ -147,6 +150,7 @@ func (e *Engine) init(ctx context.Context) error {
 		state.HandleRowsInsert(ctx, ibat, catalog.MO_COLUMNS_ATT_CPKEY_IDX, packer, e.mp)
 		done()
 		e.catalog.InsertColumns(bat)
+		bat.Clean(m)
 	}
 
 	{ // init mo_tables table
@@ -180,6 +184,7 @@ func (e *Engine) init(ctx context.Context) error {
 		state.HandleRowsInsert(ctx, ibat, catalog.MO_TABLES_CPKEY_IDX, packer, e.mp)
 		done()
 		e.catalog.InsertTable(bat)
+		bat.Clean(m)
 
 		part = e.partitions[[2]uint64{catalog.MO_CATALOG_ID, catalog.MO_COLUMNS_ID}]
 		bat, err = catalog.GenCreateColumnTuples(cols, m, packer)
@@ -195,6 +200,7 @@ func (e *Engine) init(ctx context.Context) error {
 		state.HandleRowsInsert(ctx, ibat, catalog.MO_COLUMNS_ATT_CPKEY_IDX, packer, e.mp)
 		done()
 		e.catalog.InsertColumns(bat)
+		bat.Clean(m)
 	}
 
 	{ // mo_columns
@@ -228,6 +234,7 @@ func (e *Engine) init(ctx context.Context) error {
 		state.HandleRowsInsert(ctx, ibat, catalog.MO_TABLES_CPKEY_IDX, packer, e.mp)
 		done()
 		e.catalog.InsertTable(bat)
+		bat.Clean(m)
 
 		part = e.partitions[[2]uint64{catalog.MO_CATALOG_ID, catalog.MO_COLUMNS_ID}]
 		bat, err = catalog.GenCreateColumnTuples(cols, m, packer)
@@ -243,6 +250,7 @@ func (e *Engine) init(ctx context.Context) error {
 		state.HandleRowsInsert(ctx, ibat, catalog.MO_COLUMNS_ATT_CPKEY_IDX, packer, e.mp)
 		done()
 		e.catalog.InsertColumns(bat)
+		bat.Clean(m)
 	}
 
 	return nil

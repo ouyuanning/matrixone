@@ -848,7 +848,9 @@ func getPkValueExpr(builder *QueryBuilder, ctx CompilerContext, tableDef *TableD
 				return nil, err
 			}
 			vec.InplaceSortAndCompact()
+			vecLength := vec.Length()
 			data, err := vec.MarshalBinary()
+			vec.Free(proc.GetMPool())
 			if err != nil {
 				return nil, err
 			}
@@ -858,7 +860,7 @@ func getPkValueExpr(builder *QueryBuilder, ctx CompilerContext, tableDef *TableD
 					Typ: pkExpr.Typ,
 					Expr: &plan.Expr_Vec{
 						Vec: &plan.LiteralVec{
-							Len:  int32(vec.Length()),
+							Len:  int32(vecLength),
 							Data: data,
 						},
 					},

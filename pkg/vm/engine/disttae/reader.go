@@ -259,6 +259,11 @@ func NewReader(
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if baseFilter.vec != nil {
+			baseFilter.vec.Free(proc.GetMPool())
+		}
+	}()
 
 	packerPool := e.packerPool
 	memFilter, err := newMemPKFilter(

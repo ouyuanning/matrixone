@@ -17,13 +17,16 @@ package vector
 import (
 	"bytes"
 	"fmt"
+	"runtime/debug"
 	"slices"
 	"sort"
+	"time"
 	"unsafe"
 
 	"github.com/matrixorigin/matrixone/pkg/common/bitmap"
 	"github.com/matrixorigin/matrixone/pkg/common/moerr"
 	"github.com/matrixorigin/matrixone/pkg/common/mpool"
+	"github.com/matrixorigin/matrixone/pkg/common/reuse"
 	"github.com/matrixorigin/matrixone/pkg/container/bytejson"
 	"github.com/matrixorigin/matrixone/pkg/container/nulls"
 	"github.com/matrixorigin/matrixone/pkg/container/types"
@@ -63,6 +66,9 @@ type Vector struct {
 
 	// FIXME: Bad design! Will be deleted soon.
 	isBin bool
+
+	AllocMsg string
+	FreeMsg  string
 }
 
 type typedSlice struct {
@@ -480,7 +486,8 @@ func (v *Vector) Free(mp *mpool.MPool) {
 	// }
 	// v.FreeMsg = append(v.FreeMsg, time.Now().String()+" : typ="+v.typ.DescString()+" "+string(debug.Stack()))
 
-	//reuse.Free[Vector](v, nil)
+	v.FreeMsg = time.Now().String() + " : typ=" + v.typ.DescString() + " " + string(debug.Stack())
+	reuse.Free[Vector](v, nil)
 }
 
 func (v *Vector) MarshalBinary() ([]byte, error) {

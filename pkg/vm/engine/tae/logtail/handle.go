@@ -263,6 +263,12 @@ func (b *TableLogtailRespBuilder) Close() {
 		}
 	}
 	b.dataDelBatches = nil
+
+	b.dataMetaBatch.Close()
+	b.dataMetaBatch = nil
+
+	b.tombstoneMetaBatch.Close()
+	b.tombstoneMetaBatch = nil
 }
 
 func (b *TableLogtailRespBuilder) VisitObj(e *catalog.ObjectEntry) error {

@@ -767,6 +767,7 @@ func CompileFilterExpr(
 				return
 			}
 			vec := vector.NewVec(types.T_any.ToType())
+			defer vec.Free(proc.GetMPool())
 			_ = vec.UnmarshalBinary(val)
 			colDef := getColDefByName(colExpr.Col.Name, tableDef)
 			isPK, isSorted := isSortedKey(colDef)
@@ -847,6 +848,7 @@ func CompileFilterExpr(
 				return
 			}
 			vec := vector.NewVec(types.T_any.ToType())
+			defer vec.Free(proc.GetMPool())
 			_ = vec.UnmarshalBinary(val)
 			colDef := getColDefByName(colExpr.Col.Name, tableDef)
 			isPK, isSorted := isSortedKey(colDef)

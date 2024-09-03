@@ -171,9 +171,12 @@ func (expr *FunctionExpressionExecutor) doFold(proc *process.Process, atRuntime 
 		if err = expr.evalFn(expr.parameterResults, expr.resultVector, proc, 1, nil); err != nil {
 			return err
 		}
-		if expr.folded.foldVector, err = expr.resultVector.GetResultVector().ToConst(0, 1, proc.Mp()).Dup(proc.Mp()); err != nil {
+		val := expr.resultVector.GetResultVector().ToConst(0, 1, proc.Mp())
+		if expr.folded.foldVector, err = val.Dup(proc.Mp()); err != nil {
+			val.Free(proc.GetMPool())
 			return err
 		}
+		val.Free(proc.GetMPool())
 		expr.resultVector.Free()
 	}
 	expr.folded.canFold = true

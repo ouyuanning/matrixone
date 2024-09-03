@@ -15,6 +15,9 @@
 package vector
 
 import (
+	"runtime/debug"
+	"time"
+
 	"github.com/matrixorigin/matrixone/pkg/common/reuse"
 	"github.com/matrixorigin/matrixone/pkg/container/nulls"
 )
@@ -35,7 +38,8 @@ func init() {
 			// 	// OnUsed: v.OnUsed,
 			// }
 		},
-		reuse.DefaultOptions[Vector](),
+		// reuse.DefaultOptions[Vector](),
+		reuse.DefaultOptions[Vector]().WithEnableChecker(),
 	)
 }
 
@@ -44,9 +48,11 @@ func (v Vector) TypeName() string {
 }
 
 func NewVecFromReuse() *Vector {
-	//v := reuse.Alloc[Vector](nil)
-	v := new(Vector)
+	v := reuse.Alloc[Vector](nil)
+	// v := new(Vector)
 	v.nsp = &nulls.Nulls{}
+	v.AllocMsg = time.Now().String() + " : " + string(debug.Stack())
+
 	// if v.OnUsed {
 	// 	panic("alloc onused vector")
 	// }

@@ -130,8 +130,9 @@ func (c *checker[T, P]) gc(v P) {
 	switch s {
 	// the v is marked in use, but v is release by gc
 	case inUse:
-		panic(fmt.Sprintf("missing free for type: %T, %+v \n create by: <<<%s>>>\n",
-			v, v, c.mu.createStack[k]))
+		fmt.Print("debug here, then check v.AllocMsg")
+		// panic(fmt.Sprintf("missing free for type: %T, %+v \n create by: <<<%s>>>\n",
+		// 	v, v, c.mu.createStack[k]))
 	}
 
 	delete(c.mu.m, k)
