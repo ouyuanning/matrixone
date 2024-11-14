@@ -17,6 +17,7 @@ package multi_update
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"slices"
 
 	"github.com/matrixorigin/matrixone/pkg/catalog"
@@ -462,7 +463,21 @@ func (writer *s3Writer) sortAndSyncOneTable(
 		}
 		buf = writer.insertBuf[idx]
 	}
+	min := int64(math.MaxInt64)
+	max := int64(0)
 	sinker := func(bat *batch.Batch) error {
+		if writer.updateCtxs[idx].TableDef.Name == "lineitem" {
+			orderKey := vector.MustFixedColNoTypeCheck[int64](bat.GetVector(0))
+			for _, key := range orderKey {
+				if key < min {
+					min = key
+				}
+				if key > max {
+					max = key
+				}
+			}
+		}
+
 		_, err := blockWriter.WriteBatch(bat)
 		return err
 	}
@@ -477,6 +492,9 @@ func (writer *s3Writer) sortAndSyncOneTable(
 	blockInfos, objStats, err = syncThenGetBlockInfoAndStats(newCtx, blockWriter, sortIndx)
 	if err != nil {
 		return
+	}
+	if writer.updateCtxs[idx].TableDef.Name == "lineitem" {
+		fmt.Printf("------- writer=%p,min=%d, max=%d, obj=%s \n", blockWriter, min, max, objStats.String())
 	}
 	analyzer.AddS3RequestCount(crs)
 	analyzer.AddDiskIO(crs)
