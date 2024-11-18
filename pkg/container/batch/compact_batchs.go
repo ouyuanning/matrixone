@@ -51,6 +51,15 @@ func (bats *CompactBatchs) Get(idx int) *Batch {
 	return bats.batchs[idx]
 }
 
+func (bats *CompactBatchs) BetterToPush() bool {
+	batLen := bats.Length()
+	if batLen == 0 {
+		return true
+	}
+	lastBatRowCount := bats.batchs[batLen-1].rowCount
+	return lastBatRowCount == DefaultBatchMaxRow
+}
+
 // Push  append inBatch to CompactBatchs.
 // CompactBatchs will obtain ownership of inBatch
 func (bats *CompactBatchs) Push(mpool *mpool.MPool, inBatch *Batch) error {
@@ -70,7 +79,7 @@ func (bats *CompactBatchs) Push(mpool *mpool.MPool, inBatch *Batch) error {
 
 	// fast path 1
 	lastBatRowCount := bats.batchs[batLen-1].rowCount
-	if lastBatRowCount == 0 {
+	if lastBatRowCount == DefaultBatchMaxRow {
 		bats.batchs = append(bats.batchs, inBatch)
 		return nil
 	}

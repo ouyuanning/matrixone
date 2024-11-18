@@ -71,6 +71,7 @@ func newDeleteBlockData(inputBatch *batch.Batch, pkIdx int) *deleteBlockData {
 
 type s3Writer struct {
 	cacheBatchs *batch.CompactBatchs
+	batchPool   []*batch.Batch
 	segmentMap  map[string]int32
 
 	action actionType
@@ -147,7 +148,24 @@ func newS3Writer(update *MultiUpdate) (*s3Writer, error) {
 }
 
 func (writer *s3Writer) append(proc *process.Process, analyzer process.Analyzer, inBatch *batch.Batch) (err error) {
-	err = writer.cacheBatchs.Extend(proc.Mp(), inBatch)
+	if writer.cacheBatchs.BetterToPush() {
+		var tmpBat *batch.Batch
+		if len(writer.batchPool) > 0 {
+			lastIdx := len(writer.batchPool) - 1
+			tmpBat = writer.batchPool[lastIdx]
+			writer.batchPool = writer.batchPool[0:lastIdx]
+			tmpBat, err = tmpBat.AppendWithCopy(proc.Ctx, proc.Mp(), inBatch)
+		} else {
+			tmpBat, err = inBatch.Dup(proc.Mp())
+		}
+
+		if err != nil {
+			return
+		}
+		err = writer.cacheBatchs.Push(proc.Mp(), tmpBat)
+	} else {
+		err = writer.cacheBatchs.Extend(proc.Mp(), inBatch)
+	}
 	if err != nil {
 		return
 	}
@@ -361,7 +379,9 @@ func (writer *s3Writer) sortAndSync(proc *process.Process, analyzer process.Anal
 
 	writer.batchSize = 0
 	for _, bat := range writer.cacheBatchs.TakeBatchs() {
-		bat.Clean(proc.GetMPool())
+		bat.CleanOnlyData()
+		writer.batchPool = append(writer.batchPool, bat)
+		// bat.Clean(proc.GetMPool())
 	}
 	return
 }
@@ -668,6 +688,10 @@ func (writer *s3Writer) flushTailAndWriteToOutput(proc *process.Process, analyze
 }
 
 func (writer *s3Writer) reset(proc *process.Process) (err error) {
+	for _, bat := range writer.batchPool {
+		bat.Clean(proc.Mp())
+	}
+	writer.batchPool = nil
 	bats := writer.cacheBatchs.TakeBatchs()
 	for _, bat := range bats {
 		bat.Clean(proc.Mp())
@@ -721,6 +745,10 @@ func (writer *s3Writer) reset(proc *process.Process) (err error) {
 }
 
 func (writer *s3Writer) free(proc *process.Process) (err error) {
+	for _, bat := range writer.batchPool {
+		bat.Clean(proc.Mp())
+	}
+	writer.batchPool = nil
 	bats := writer.cacheBatchs.TakeBatchs()
 	for _, bat := range bats {
 		bat.Clean(proc.Mp())
