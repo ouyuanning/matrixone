@@ -99,10 +99,12 @@ type s3Writer struct {
 
 	checkSizeCols []int
 	buf           bytes.Buffer
+	sels          []int64
 }
 
 func newS3Writer(update *MultiUpdate) (*s3Writer, error) {
 	tableCount := len(update.MultiUpdateCtx)
+	sels := make([]int64, 0, colexec.DefaultBatchSize)
 	writer := &s3Writer{
 		cacheBatchs:    batch.NewCompactBatchs(),
 		segmentMap:     update.SegmentMap,
@@ -119,6 +121,8 @@ func newS3Writer(update *MultiUpdate) (*s3Writer, error) {
 		insertBlockInfo:     make([][]*batch.Batch, tableCount),
 		insertBlockRowCount: make([][]uint64, tableCount),
 		deleteBlockMap:      make([][]map[types.Blockid]*deleteBlockData, tableCount),
+
+		sels: sels,
 	}
 
 	for _, updateCtx := range update.MultiUpdateCtx {
@@ -349,7 +353,7 @@ func (writer *s3Writer) sortAndSync(proc *process.Process, analyzer process.Anal
 						sortIdx := updateCtx.InsertCols[writer.sortIdxs[i]]
 						for j := 0; j < writer.cacheBatchs.Length(); j++ {
 							needSortBat := writer.cacheBatchs.Get(j)
-							err = colexec.SortByKey(proc, needSortBat, sortIdx, isClusterBy, proc.GetMPool())
+							err = colexec.SortByKey(proc, needSortBat, sortIdx, isClusterBy, proc.GetMPool(), writer.sels)
 							if err != nil {
 								return
 							}
@@ -451,7 +455,7 @@ func (writer *s3Writer) sortAndSyncOneTable(
 	nulls := make([]*nulls.Nulls, len(bats))
 	if needSortBatch {
 		for i := range bats {
-			err = colexec.SortByKey(proc, bats[i], sortIndex, isClusterBy, proc.GetMPool())
+			err = colexec.SortByKey(proc, bats[i], sortIndex, isClusterBy, proc.GetMPool(), writer.sels)
 			if err != nil {
 				return
 			}
