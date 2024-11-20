@@ -100,10 +100,13 @@ func (bats *CompactBatchs) Extend(mpool *mpool.MPool, inBatch *Batch) error {
 	if inBatch.rowCount == 0 {
 		return nil
 	}
+	offHeap := inBatch.offHeap
 
 	// empty bats
 	if batLen == 0 {
+		inBatch.offHeap = true
 		tmpBat, err = inBatch.Dup(mpool)
+		inBatch.offHeap = offHeap
 		if err != nil {
 			return err
 		}
@@ -113,7 +116,9 @@ func (bats *CompactBatchs) Extend(mpool *mpool.MPool, inBatch *Batch) error {
 
 	lastBatRowCount := bats.batchs[batLen-1].rowCount
 	if lastBatRowCount == DefaultBatchMaxRow {
+		inBatch.offHeap = true
 		tmpBat, err = inBatch.Dup(mpool)
+		inBatch.offHeap = offHeap
 		if err != nil {
 			return err
 		}
