@@ -166,7 +166,8 @@ func (bats *CompactBatchs) fillData(mpool *mpool.MPool, inBatch *Batch) error {
 			tmpBat = bats.batchs[batLen-1]
 			isNewBat = false
 		} else {
-			tmpBat = NewWithSize(len(inBatch.Vecs))
+			// tmpBat = NewWithSize(len(inBatch.Vecs))
+			tmpBat = NewOffHeapWithSize(len(inBatch.Vecs))
 			bats.batchs = append(bats.batchs, tmpBat)
 			isNewBat = true
 		}
