@@ -166,7 +166,7 @@ func (bats *CompactBatchs) fillData(mpool *mpool.MPool, inBatch *Batch) error {
 			tmpBat = bats.batchs[batLen-1]
 			isNewBat = false
 		} else {
-			tmpBat = NewWithSize(len(inBatch.Vecs))
+			tmpBat = NewOffHeapWithSize(len(inBatch.Vecs))
 			bats.batchs = append(bats.batchs, tmpBat)
 			isNewBat = true
 		}
@@ -178,7 +178,7 @@ func (bats *CompactBatchs) fillData(mpool *mpool.MPool, inBatch *Batch) error {
 
 		if isNewBat {
 			for i := range tmpBat.Vecs {
-				tmpBat.Vecs[i], err = inBatch.Vecs[i].CloneWindow(start, start+addRowCount, mpool)
+				tmpBat.Vecs[i], err = inBatch.Vecs[i].CloneWindowOffHeap(start, start+addRowCount, mpool)
 				if err != nil {
 					return err
 				}

@@ -17,6 +17,7 @@ package table_function
 import (
 	"encoding/json"
 	"strings"
+	"unsafe"
 
 	"github.com/matrixorigin/matrixone/pkg/common/moerr"
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
@@ -127,17 +128,19 @@ func (u *tokenizeState) start(tf *TableFunction, proc *process.Process, nthRow i
 	switch u.param.Parser {
 	case "", "ngram", "default":
 
-		var c string
+		// var c string
+		tokens := make([]byte, 0, vlen)
 		for i := 1; i < vlen; i++ {
 			if i > 1 {
-				c += "\n"
+				tokens = append(tokens, '\n')
+				// c += "\n"
 			}
-			data := tf.ctr.argVecs[i].GetStringAt(nthRow)
 
 			// fix issue #19948 return vector type is not datalink even the input argurment type is datalink
 			// so we have to check the input argument instead of vector
 			//if tf.ctr.argVecs[i].GetType().Oid == types.T_datalink {
 			if types.T(tf.Args[i].Typ.Id) == types.T_datalink {
+				data := tf.ctr.argVecs[i].UnsafeGetStringAt(nthRow)
 				// datalink
 				dl, err := datalink.NewDatalink(data, proc)
 				if err != nil {
@@ -148,13 +151,15 @@ func (u *tokenizeState) start(tf *TableFunction, proc *process.Process, nthRow i
 					return err
 				}
 
-				c += string(b)
+				// c += string(b)
+				tokens = append(tokens, b...)
 			} else {
-				c += data
+				data := tf.ctr.argVecs[i].GetRawBytesAt(nthRow)
+				tokens = append(tokens, data...)
 			}
 		}
 
-		tok, _ := tokenizer.NewSimpleTokenizer([]byte(c))
+		tok, _ := tokenizer.NewSimpleTokenizer(tokens)
 		for t := range tok.Tokenize() {
 
 			slen := t.TokenBytes[0]
@@ -183,9 +188,8 @@ func (u *tokenizeState) start(tf *TableFunction, proc *process.Process, nthRow i
 			voffset := int32(0)
 			for t := range bj.TokenizeValue(false) {
 				jslen := t.TokenBytes[0]
-				value := string(t.TokenBytes[1 : jslen+1])
 				// tokenize the value
-				tok, _ := tokenizer.NewSimpleTokenizer([]byte(value))
+				tok, _ := tokenizer.NewSimpleTokenizer(t.TokenBytes[1 : jslen+1])
 				for tt := range tok.Tokenize() {
 					tslen := tt.TokenBytes[0]
 					word := string(tt.TokenBytes[1 : tslen+1])
@@ -212,4 +216,8 @@ func (u *tokenizeState) start(tf *TableFunction, proc *process.Process, nthRow i
 
 	u.batch.SetRowCount(len(doc.Words))
 	return nil
+}
+
+func String2Bytes(s string) []byte {
+	return *(*[]byte)(unsafe.Pointer(&s))
 }

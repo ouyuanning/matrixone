@@ -61,6 +61,7 @@ require (
 	github.com/ncruces/go-dns v1.2.5
 	github.com/panjf2000/ants/v2 v2.7.4
 	github.com/parquet-go/parquet-go v0.23.0
+	github.com/petermattis/goid v0.0.0-20241025130422-66cb2e6d7274
 	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/pkg/errors v0.9.1
 	github.com/plar/go-adaptive-radix-tree v1.0.5
@@ -125,7 +126,6 @@ require (
 	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/opentracing/opentracing-go v1.2.1-0.20220228012449-10b1cf09e00b // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
-	github.com/petermattis/goid v0.0.0-20241025130422-66cb2e6d7274 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
@@ -222,3 +222,5 @@ replace (
 	github.com/lni/goutils v1.3.1-0.20220604063047-388d67b4dbc4 => github.com/matrixorigin/goutils v1.3.1-0.20220604063047-388d67b4dbc4
 	github.com/lni/vfs v0.2.1-0.20220616104132-8852fd867376 => github.com/matrixorigin/vfs v0.2.1-0.20220616104132-8852fd867376
 )
+
+replace github.com/matrixorigin/monlp v0.0.0-20240825091235-be436dc30e78 => github.com/ouyuanning/monlp v0.0.0-20241120072548-f4a0fa84dabb
