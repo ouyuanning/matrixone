@@ -16,6 +16,7 @@ package disttae
 
 import (
 	"context"
+	"github.com/matrixorigin/matrixone/pkg/txn/client"
 	"time"
 
 	"github.com/fagongzi/goetty/v2/buf"
@@ -1034,6 +1035,13 @@ func (tbl *txnTableDelegate) GetProcess() any {
 		return tbl.partition.tbl.GetProcess()
 	}
 	return tbl.origin.GetProcess()
+}
+
+func (tbl *txnTableDelegate) Reset(op client.TxnOperator) error {
+	if tbl.partition.is {
+		return tbl.partition.tbl.Reset(op)
+	}
+	return tbl.origin.Reset(op)
 }
 
 func (tbl *txnTableDelegate) isLocalFunc() (bool, error) {

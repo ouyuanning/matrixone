@@ -91,11 +91,23 @@ func (lockOp *LockOp) Prepare(proc *process.Process) error {
 		lockOp.ctr.relations = make([]engine.Relation, len(lockOp.targets))
 		for i, target := range lockOp.targets {
 			if target.objRef != nil {
-				rel, err := colexec.GetRelAndPartitionRelsByObjRef(proc.Ctx, proc, lockOp.engine, target.objRef)
-				if err != nil {
-					return err
+				if lockOp.ctr.relations[i] == nil {
+					rel, err := colexec.GetRelAndPartitionRelsByObjRef(proc.Ctx, proc, lockOp.engine, target.objRef)
+					if err != nil {
+						return err
+					}
+					lockOp.ctr.relations[i] = rel
+				} else {
+					if err := lockOp.ctr.relations[i].Reset(proc.GetTxnOperator()); err != nil {
+						return err
+					}
 				}
-				lockOp.ctr.relations[i] = rel
+			}
+		}
+	} else {
+		for i := range lockOp.ctr.relations {
+			if err := lockOp.ctr.relations[i].Reset(proc.GetTxnOperator()); err != nil {
+				return err
 			}
 		}
 	}
@@ -944,12 +956,12 @@ func (lockOp *LockOp) Reset(proc *process.Process, pipelineFailed bool, err erro
 	lockOp.resetParker()
 	lockOp.ctr.retryError = nil
 	lockOp.ctr.defChanged = false
-	lockOp.ctr.relations = nil
 }
 
 // Free free mem
 func (lockOp *LockOp) Free(proc *process.Process, pipelineFailed bool, err error) {
 	lockOp.cleanParker()
+	lockOp.ctr.relations = nil
 }
 
 func (lockOp *LockOp) ExecProjection(proc *process.Process, input *batch.Batch) (*batch.Batch, error) {

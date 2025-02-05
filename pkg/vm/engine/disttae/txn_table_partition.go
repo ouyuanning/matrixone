@@ -16,6 +16,7 @@ package disttae
 
 import (
 	"context"
+	"github.com/matrixorigin/matrixone/pkg/txn/client"
 
 	"github.com/matrixorigin/matrixone/pkg/common/mpool"
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
@@ -447,6 +448,10 @@ func (t *partitionTxnTable) PrimaryKeysMayBeUpserted(
 	pkIndex int32,
 ) (bool, error) {
 	panic("BUG: cannot upsert primary keys in partition primary table")
+}
+
+func (t *partitionTxnTable) Reset(op client.TxnOperator) error {
+	return t.primary.Reset(op)
 }
 
 type partitionedRelData struct {

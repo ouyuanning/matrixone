@@ -139,9 +139,6 @@ func (update *MultiUpdate) Reset(proc *process.Process, pipelineFailed bool, err
 	if update.ctr.s3Writer != nil {
 		update.ctr.s3Writer.reset(proc)
 	}
-	for _, info := range update.ctr.updateCtxInfos {
-		info.Sources = nil
-	}
 	update.ctr.state = vm.Build
 }
 
@@ -161,6 +158,9 @@ func (update *MultiUpdate) Free(proc *process.Process, pipelineFailed bool, err 
 	}
 	update.ctr.deleteBuf = nil
 
+	for _, info := range update.ctr.updateCtxInfos {
+		info.Sources = nil
+	}
 	if update.ctr.s3Writer != nil {
 		update.ctr.s3Writer.free(proc)
 		update.ctr.s3Writer = nil
