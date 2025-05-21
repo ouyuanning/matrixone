@@ -172,7 +172,7 @@ func (expr *FunctionExpressionExecutor) doFold(proc *process.Process, atRuntime 
 		return err
 	}
 	if execLen == 1 {
-		expr.resultVector.GetResultVector().ToConst()
+		expr.resultVector.GetResultVector().ToConst(true)
 	}
 
 	expr.folded.canFold = true
