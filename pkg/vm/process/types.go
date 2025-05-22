@@ -283,7 +283,7 @@ type BaseProcess struct {
 	LastInsertID        *uint64
 	LoadLocalReader     *io.PipeReader
 	Aicm                *defines.AutoIncrCacheManager
-	resolveVariableFunc func(varName string, isSystemVar, isGlobalVar bool) (interface{}, error)
+	resolveVariableFunc func(varName string, isSystemVar, isGlobalVar bool) (bool, interface{}, error)
 	prepareParams       *vector.Vector
 	QueryClient         qclient.QueryClient
 	Hakeeper            logservice.CNHAKeeperClient
@@ -384,11 +384,11 @@ func (proc *Process) GetPrepareParamsAt(i int) ([]byte, error) {
 	}
 }
 
-func (proc *Process) SetResolveVariableFunc(f func(varName string, isSystemVar, isGlobalVar bool) (interface{}, error)) {
+func (proc *Process) SetResolveVariableFunc(f func(varName string, isSystemVar, isGlobalVar bool) (bool, interface{}, error)) {
 	proc.Base.resolveVariableFunc = f
 }
 
-func (proc *Process) GetResolveVariableFunc() func(varName string, isSystemVar, isGlobalVar bool) (interface{}, error) {
+func (proc *Process) GetResolveVariableFunc() func(varName string, isSystemVar, isGlobalVar bool) (bool, interface{}, error) {
 	return proc.Base.resolveVariableFunc
 }
 

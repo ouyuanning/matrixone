@@ -88,7 +88,7 @@ func (m *MockCompilerContext) ResolveAccountIds(accountNames []string) ([]uint32
 	return []uint32{catalog.System_Account}, nil
 }
 
-func (m *MockCompilerContext) ResolveVariable(varName string, isSystemVar, isGlobalVar bool) (interface{}, error) {
+func (m *MockCompilerContext) ResolveVariable(varName string, isSystemVar, isGlobalVar bool) (bool, interface{}, error) {
 	vars := make(map[string]interface{})
 	vars["str_var"] = "str"
 	vars["int_var"] = 20
@@ -108,10 +108,10 @@ func (m *MockCompilerContext) ResolveVariable(varName string, isSystemVar, isGlo
 	vars["foreign_key_checks"] = int64(1)
 
 	if result, ok := vars[varName]; ok {
-		return result, nil
+		return true, result, nil
 	}
 
-	return nil, moerr.NewInternalError(m.ctx, "var not found")
+	return false, nil, moerr.NewInternalError(m.ctx, "var not found")
 }
 
 type col struct {

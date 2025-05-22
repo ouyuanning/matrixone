@@ -709,7 +709,7 @@ func (tcc *TxnCompilerContext) ResolveUdf(name string, args []*plan.Expr) (udf *
 	}
 }
 
-func (tcc *TxnCompilerContext) ResolveVariable(varName string, isSystemVar, isGlobalVar bool) (varValue interface{}, err error) {
+func (tcc *TxnCompilerContext) ResolveVariable(varName string, isSystemVar, isGlobalVar bool) (exists bool, varValue interface{}, err error) {
 	stats := statistic.StatsInfoFromContext(tcc.execCtx.reqCtx)
 	start := time.Now()
 	defer func() {
@@ -723,7 +723,8 @@ func (tcc *TxnCompilerContext) ResolveVariable(varName string, isSystemVar, isGl
 		for i := len(*tmpScope) - 1; i >= 0; i-- {
 			curScope := (*tmpScope)[i]
 			if val, ok := curScope[strings.ToLower(varName)]; ok {
-				return val, nil
+				exists = true
+				return exists, val, nil
 			}
 		}
 	}
@@ -741,12 +742,13 @@ func (tcc *TxnCompilerContext) ResolveVariable(varName string, isSystemVar, isGl
 	} else {
 		var udVar *UserDefinedVar
 		if udVar, err = tcc.GetSession().GetUserDefinedVar(varName); err != nil || udVar == nil {
-			return nil, err
+			return false, nil, err
 		}
 
 		varValue = udVar.Value
 	}
 
+	exists = true
 	return
 }
 

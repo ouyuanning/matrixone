@@ -87,7 +87,7 @@ type CompilerContext interface {
 	// get table definition by table id
 	ResolveById(tableId uint64, snapshot *Snapshot) (*ObjectRef, *TableDef)
 	// get the value of variable
-	ResolveVariable(varName string, isSystemVar, isGlobalVar bool) (interface{}, error)
+	ResolveVariable(varName string, isSystemVar, isGlobalVar bool) (bool, interface{}, error)
 	// get the list of the account id
 	ResolveAccountIds(accountNames []string) ([]uint32, error)
 	// get the relevant information of udf
