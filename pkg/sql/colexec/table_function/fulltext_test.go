@@ -61,16 +61,16 @@ var (
 
 func newFTTestCase(m *mpool.MPool, attrs []string, algo fulltext.FullTextScoreAlgo) fulltextTestCase {
 	proc := testutil.NewProcessWithMPool("", m)
-	proc.SetResolveVariableFunc(func(varName string, isSystemVar, isGlobalVar bool) (interface{}, error) {
+	proc.SetResolveVariableFunc(func(varName string, isSystemVar, isGlobalVar bool) (bool, interface{}, error) {
 		if varName == fulltext.FulltextRelevancyAlgo {
 			if algo == fulltext.ALGO_BM25 {
-				return fulltext.FulltextRelevancyAlgo_bm25, nil
+				return true, fulltext.FulltextRelevancyAlgo_bm25, nil
 			} else if algo == fulltext.ALGO_TFIDF {
-				return fulltext.FulltextRelevancyAlgo_tfidf, nil
+				return true, fulltext.FulltextRelevancyAlgo_tfidf, nil
 			}
-			return fulltext.FulltextRelevancyAlgo_bm25, nil
+			return true, fulltext.FulltextRelevancyAlgo_bm25, nil
 		}
-		return nil, nil
+		return false, nil, nil
 	})
 	colDefs := make([]*plan.ColDef, len(attrs))
 	for i := range attrs {

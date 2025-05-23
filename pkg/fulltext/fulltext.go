@@ -997,11 +997,11 @@ func ParsePattern(pattern string, mode int64) ([]*Pattern, error) {
 
 func GetScoreAlgo(proc *process.Process) (FullTextScoreAlgo, error) {
 	scoreAlgo := ALGO_TFIDF
-	val, err := proc.GetResolveVariableFunc()(FulltextRelevancyAlgo, true, false)
+	exists, val, err := proc.GetResolveVariableFunc()(FulltextRelevancyAlgo, true, false)
 	if err != nil {
 		return scoreAlgo, err
 	}
-	if val != nil {
+	if exists && val != nil {
 		algo := fmt.Sprintf("%v", val)
 		if algo == FulltextRelevancyAlgo_bm25 {
 			scoreAlgo = ALGO_BM25

@@ -110,7 +110,7 @@ func pluginPrepare(proc *process.Process, arg *TableFunction) (tvfState, error) 
 		arg.Attrs[i] = strings.ToUpper(arg.Attrs[i])
 	}
 
-	val, err := proc.GetResolveVariableFunc()("moplugin_allowed_hosts", true, false)
+	_, val, err := proc.GetResolveVariableFunc()("moplugin_allowed_hosts", true, false)
 	if err != nil {
 		return nil, err
 	}

@@ -349,7 +349,7 @@ type VarExpressionExecutor struct {
 }
 
 func (expr *VarExpressionExecutor) Eval(proc *process.Process, batches []*batch.Batch, _ []bool) (*vector.Vector, error) {
-	val, err := proc.GetResolveVariableFunc()(expr.name, expr.system, expr.global)
+	_, val, err := proc.GetResolveVariableFunc()(expr.name, expr.system, expr.global)
 	if err != nil {
 		return nil, err
 	}

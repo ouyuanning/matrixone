@@ -490,11 +490,11 @@ func initExecuteStmtParam(execCtx *ExecCtx, ses *Session, cwft *TxnComputationWr
 		paramVals := make([]any, numParams)
 		for i, arg := range execPlan.Args {
 			exprImpl := arg.Expr.(*plan.Expr_V)
-			param, err := cwft.proc.GetResolveVariableFunc()(exprImpl.V.Name, exprImpl.V.System, exprImpl.V.Global)
+			exists, param, err := cwft.proc.GetResolveVariableFunc()(exprImpl.V.Name, exprImpl.V.System, exprImpl.V.Global)
 			if err != nil {
 				return nil, nil, nil, originSQL, err
 			}
-			if param == nil {
+			if !exists {
 				return nil, nil, nil, originSQL, moerr.NewInvalidInput(reqCtx, "Incorrect arguments to EXECUTE")
 			}
 			err = util.AppendAnyToStringVector(cwft.proc, param, params)

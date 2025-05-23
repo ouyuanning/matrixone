@@ -171,11 +171,11 @@ func TestVarExpressionExecutor(t *testing.T) {
 	}
 
 	// Mock the variable resolution function
-	proc.SetResolveVariableFunc(func(name string, system, global bool) (interface{}, error) {
+	proc.SetResolveVariableFunc(func(name string, system, global bool) (bool, interface{}, error) {
 		if name == "test_var" {
-			return int64(12345), nil
+			return true, int64(12345), nil
 		}
-		return nil, moerr.NewInternalErrorNoCtx("variable not found")
+		return false, nil, moerr.NewInternalErrorNoCtx("variable not found")
 	})
 
 	varExprExecutor, err := NewExpressionExecutor(proc, varExpr)
