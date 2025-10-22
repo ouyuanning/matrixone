@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/matrixorigin/matrixone/pkg/catalog"
 	"github.com/matrixorigin/matrixone/pkg/common/moerr"
@@ -346,9 +347,13 @@ func (writer *s3WriterDelegate) sortAndSync(proc *process.Process, analyzer proc
 		)
 	)
 
+	begin := time.Now()
 	defer func() {
 		writer.cleanCachedBatches(proc.Mp())
 		batchBuffer.Close(proc.GetMPool())
+		if writer.updateCtxs[0].ObjRef.ObjName == "customer" {
+			logutil.Infof("-------oyn-----  sortAndSync cost: %d ns", time.Since(begin).Nanoseconds())
+		}
 	}()
 
 	for i, updateCtx := range writer.updateCtxs {
