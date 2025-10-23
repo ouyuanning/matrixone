@@ -508,6 +508,7 @@ func (writer *s3WriterDelegate) sortAndSyncOneTable(
 	counterSet := analyzer.GetOpCounterSet()
 	writeCtx := perfcounter.AttachS3RequestKey(proc.Ctx, counterSet)
 
+	writeBegin := time.Now()
 	for i := range bats {
 		rowCount += bats[i].RowCount()
 		if err = s3Writer.Write(writeCtx, bats[i]); err != nil {
@@ -518,6 +519,10 @@ func (writer *s3WriterDelegate) sortAndSyncOneTable(
 			bats[i].Clean(proc.GetMPool())
 		}
 		bats[i] = nil
+	}
+	if tblDef.Name == "customer" {
+		logutil.Infof("-------oyn-----  s3Writer.Write cost: %d ns", time.Since(writeBegin).Nanoseconds())
+
 	}
 
 	syncBegin := time.Now()
