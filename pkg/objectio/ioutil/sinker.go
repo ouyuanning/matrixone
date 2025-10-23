@@ -488,7 +488,9 @@ func (sinker *Sinker) trySortInMemoryStaged(ctx context.Context) error {
 	return nil
 }
 
-func (sinker *Sinker) trySpill(ctx context.Context) error {
+func (sinker *Sinker) trySpill(ctx context.Context, tableName ...string) error {
+	begin := time.Now()
+
 	// sort all in memory data
 	if err := sinker.trySortInMemoryStaged(ctx); err != nil {
 		return err
@@ -552,9 +554,21 @@ func (sinker *Sinker) trySpill(ctx context.Context) error {
 			return err
 		}
 	}
+
+	if len(tableName) > 0 && tableName[0] == "customer" {
+		logutil.Infof("-------oyn-----  before sync in sinker.trySpill cost: %d ns", time.Since(begin).Nanoseconds())
+	}
+
+	beginSync := time.Now()
+	if len(tableName) > 0 && tableName[0] == "customer" {
+		ctx = context.WithValue(ctx, "test-table", "customer")
+	}
 	stats, err := fSinker.Sync(ctx)
 	if err != nil {
 		return err
+	}
+	if len(tableName) > 0 && tableName[0] == "customer" {
+		logutil.Infof("-------oyn-----  sync in sinker.trySpill cost: %d ns", time.Since(beginSync).Nanoseconds())
 	}
 
 	sinker.staged.persisted = append(sinker.staged.persisted, *stats)
@@ -643,7 +657,7 @@ func (sinker *Sinker) Sync(ctx context.Context, tblName ...string) error {
 	if sinker.staged.inMemorySize > 0 &&
 		sinker.staged.inMemorySize >= sinker.config.tailSizeCap {
 		spillBegin := time.Now()
-		if err := sinker.trySpill(ctx); err != nil {
+		if err := sinker.trySpill(ctx, tblName...); err != nil {
 			return err
 		}
 		if len(tblName) > 0 && tblName[0] == "customer" {

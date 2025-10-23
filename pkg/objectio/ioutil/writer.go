@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/types"
@@ -302,6 +303,9 @@ func (w *BlockWriter) WriteSubBatch(batch *batch.Batch, dataType objectio.DataMe
 }
 
 func (w *BlockWriter) Sync(ctx context.Context) ([]objectio.BlockObject, objectio.Extent, error) {
+	begin := time.Now()
+	testTable := ctx.Value("test-table")
+
 	if w.objMetaBuilder != nil {
 		if w.isSetPK {
 			w.objMetaBuilder.SetPKNdv(w.pk, w.objMetaBuilder.GetTotalRow())
@@ -309,7 +313,17 @@ func (w *BlockWriter) Sync(ctx context.Context) ([]objectio.BlockObject, objecti
 		cnt, meta := w.objMetaBuilder.Build()
 		w.writer.WriteObjectMeta(ctx, cnt, meta)
 	}
+
+	if testTable != nil && testTable.(string) == "customer" {
+		logutil.Infof("-------oyn-----  before writeEnd in BlockWriter.Sync cost: %d ns", time.Since(begin).Nanoseconds())
+	}
+
+	beginWriteEnd := time.Now()
 	blocks, err := w.writer.WriteEnd(ctx)
+	if testTable != nil && testTable.(string) == "customer" {
+		logutil.Infof("-------oyn----- writeEnd in BlockWriter.Sync cost: %d ns", time.Since(beginWriteEnd).Nanoseconds())
+	}
+
 	if len(blocks) == 0 {
 		logutil.Debug("[WriteEnd]", common.OperationField(w.nameStr),
 			common.OperandField("[Size=0]"), common.OperandField(w.writer.GetSeqnums()))

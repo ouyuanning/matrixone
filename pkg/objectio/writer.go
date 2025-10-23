@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/matrixorigin/matrixone/pkg/common/mpool"
 	"go.uber.org/zap"
@@ -465,6 +466,9 @@ func (w *objectWriterV1) WriteEnd(ctx context.Context, items ...WriteOptions) ([
 	w.RLock()
 	defer w.RUnlock()
 
+	begin := time.Now()
+	testTable := ctx.Value("test-table")
+
 	objectHeader := BuildHeader()
 	objectHeader.SetSchemaVersion(w.schemaVer)
 	offset := uint32(HeaderSize)
@@ -592,9 +596,18 @@ func (w *objectWriterV1) WriteEnd(ctx context.Context, items ...WriteOptions) ([
 			blockObjects = append(blockObjects, w.blocks[i][j].meta)
 		}
 	}
+
+	if testTable != nil && testTable.(string) == "customer" {
+		logutil.Infof("-------oyn-----  before Sync in objectWriterV1.Sync cost: %d ns", time.Since(begin).Nanoseconds())
+	}
+
+	beginSync := time.Now()
 	err = w.Sync(ctx, items...)
 	if err != nil {
 		return nil, err
+	}
+	if testTable != nil && testTable.(string) == "customer" {
+		logutil.Infof("-------oyn-----  Sync in objectWriterV1.Sync cost: %d ns", time.Since(beginSync).Nanoseconds())
 	}
 	// The buffer needs to be released at the end of WriteEnd
 	// Because the outside may hold this writer

@@ -349,12 +349,12 @@ func readFile(param *ExternalParam, proc *process.Process) (io.ReadCloser, error
 	if param.Extern.Local {
 		return io.NopCloser(proc.GetLoadLocalReader()), nil
 	}
-	begin := time.Now()
-	defer func() {
-		if strings.Contains(param.Extern.Filepath, "customer") {
-			logutil.Infof("-------oyn-----  readFile cost: %d ns", time.Since(begin).Nanoseconds())
-		}
-	}()
+	// begin := time.Now()
+	// defer func() {
+	// 	if strings.Contains(param.Extern.Filepath, "customer") {
+	// 		logutil.Infof("-------oyn-----  readFile cost: %d ns", time.Since(begin).Nanoseconds())
+	// 	}
+	// }()
 	fs, readPath, err := plan2.GetForETLWithType(param.Extern, param.Fileparam.Filepath)
 	if err != nil {
 		return nil, err

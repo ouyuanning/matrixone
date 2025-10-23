@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/matrixorigin/matrixone/pkg/catalog"
 	"github.com/matrixorigin/matrixone/pkg/common/moerr"
@@ -347,13 +346,13 @@ func (writer *s3WriterDelegate) sortAndSync(proc *process.Process, analyzer proc
 		)
 	)
 
-	begin := time.Now()
+	// begin := time.Now()
 	defer func() {
 		writer.cleanCachedBatches(proc.Mp())
 		batchBuffer.Close(proc.GetMPool())
-		if writer.updateCtxs[0].ObjRef.ObjName == "customer" {
-			logutil.Infof("-------oyn-----  sortAndSync cost: %d ns", time.Since(begin).Nanoseconds())
-		}
+		// if writer.updateCtxs[0].ObjRef.ObjName == "customer" {
+		// 	logutil.Infof("-------oyn-----  sortAndSync cost: %d ns", time.Since(begin).Nanoseconds())
+		// }
 	}()
 
 	for i, updateCtx := range writer.updateCtxs {
@@ -508,7 +507,7 @@ func (writer *s3WriterDelegate) sortAndSyncOneTable(
 	counterSet := analyzer.GetOpCounterSet()
 	writeCtx := perfcounter.AttachS3RequestKey(proc.Ctx, counterSet)
 
-	writeBegin := time.Now()
+	// writeBegin := time.Now()
 	for i := range bats {
 		rowCount += bats[i].RowCount()
 		if err = s3Writer.Write(writeCtx, bats[i]); err != nil {
@@ -520,17 +519,13 @@ func (writer *s3WriterDelegate) sortAndSyncOneTable(
 		}
 		bats[i] = nil
 	}
-	if tblDef.Name == "customer" {
-		logutil.Infof("-------oyn-----  s3Writer.Write cost: %d ns", time.Since(writeBegin).Nanoseconds())
 
-	}
-
-	syncBegin := time.Now()
+	// syncBegin := time.Now()
 	if _, err = s3Writer.Sync(writeCtx, tblDef.Name); err != nil {
 		return
-	}
-	if tblDef.Name == "customer" {
-		logutil.Infof("-------oyn-----  s3Writer.Sync cost: %d ns", time.Since(syncBegin).Nanoseconds())
+		// }
+		// if tblDef.Name == "customer" {
+		// 	logutil.Infof("-------oyn-----  s3Writer.Sync cost: %d ns", time.Since(syncBegin).Nanoseconds())
 
 	}
 
