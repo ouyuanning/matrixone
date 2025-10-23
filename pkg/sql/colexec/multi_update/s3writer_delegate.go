@@ -520,8 +520,13 @@ func (writer *s3WriterDelegate) sortAndSyncOneTable(
 		bats[i] = nil
 	}
 
-	if _, err = s3Writer.Sync(writeCtx); err != nil {
+	syncBegin := time.Now()
+	if _, err = s3Writer.Sync(writeCtx, tblDef.Name); err != nil {
 		return
+	}
+	if tblDef.Name == "customer" {
+		logutil.Infof("-------oyn-----  s3Writer.Sync cost: %d ns", time.Since(syncBegin).Nanoseconds())
+
 	}
 
 	analyzer.AddS3RequestCount(counterSet)

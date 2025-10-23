@@ -18,11 +18,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/matrixorigin/matrixone/pkg/common/mpool"
 	"github.com/matrixorigin/matrixone/pkg/container/batch"
 	"github.com/matrixorigin/matrixone/pkg/container/types"
 	"github.com/matrixorigin/matrixone/pkg/fileservice"
+	"github.com/matrixorigin/matrixone/pkg/logutil"
 	"github.com/matrixorigin/matrixone/pkg/objectio"
 	"github.com/matrixorigin/matrixone/pkg/objectio/mergeutil"
 	"github.com/matrixorigin/matrixone/pkg/vm/engine/tae/containers"
@@ -628,7 +630,7 @@ func (sinker *Sinker) Write(
 	return
 }
 
-func (sinker *Sinker) Sync(ctx context.Context) error {
+func (sinker *Sinker) Sync(ctx context.Context, tblName ...string) error {
 	select {
 	case <-ctx.Done():
 		return context.Cause(ctx)
@@ -640,8 +642,12 @@ func (sinker *Sinker) Sync(ctx context.Context) error {
 	// spill the remaining data
 	if sinker.staged.inMemorySize > 0 &&
 		sinker.staged.inMemorySize >= sinker.config.tailSizeCap {
+		spillBegin := time.Now()
 		if err := sinker.trySpill(ctx); err != nil {
 			return err
+		}
+		if len(tblName) > 0 && tblName[0] == "customer" {
+			logutil.Infof("-------oyn-----  trySpill cost: %d ns", time.Since(spillBegin).Nanoseconds())
 		}
 	} else {
 		if err := sinker.trySortInMemoryStaged(ctx); err != nil {
